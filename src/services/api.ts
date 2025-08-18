@@ -1,23 +1,18 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import Config from '../constants/config';
 import {
-  DashboardStats,
-  OptimizedStats,
-  Trainer,
-  CreateTrainerRequest,
+  ApiResponse,
   Client,
   CreateClientRequest,
-  ApiResponse,
-  PaginatedResponse,
-  LoginRequest,
   LoginResponse,
-  User,
+  Trainer,
+  User
 } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
-  
+
   constructor() {
     // API desplegada en Vercel
     this.api = axios.create({
@@ -35,9 +30,15 @@ class ApiService {
     // Request interceptor para agregar token
     this.api.interceptors.request.use(
       async (config) => {
-  const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
+        const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
+        console.log(`🔍 Request interceptor - URL: ${config.url}`);
+        console.log(`🔍 Token encontrado: ${token ? `${token.substring(0, 20)}...` : 'NO TOKEN'}`);
+
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log(`✅ Token agregado a headers: Bearer ${token.substring(0, 20)}...`);
+        } else {
+          console.log(`❌ No se encontró token en AsyncStorage`);
         }
         return config;
       },
@@ -58,7 +59,7 @@ class ApiService {
           message: error.message,
           data: error.response?.data,
         });
-        
+
         if (error.response?.status === 401) {
           await AsyncStorage.removeItem(Config.AUTH.TOKEN_KEY);
           // Aquí podrías redirigir al login
@@ -71,27 +72,29 @@ class ApiService {
   // Authentication
   async login(correo: string, contrasena: string): Promise<LoginResponse> {
     console.log('🔑 Intentando login con:', { correo });
-    
-  const response: AxiosResponse<LoginResponse> = await this.api.post(Config.ENDPOINTS.AUTH_LOGIN, {
+
+    const response: AxiosResponse<LoginResponse> = await this.api.post(Config.ENDPOINTS.AUTH_LOGIN, {
       correo,
       contrasena
     });
-    
-    console.log('✅ Login exitoso:', { 
-      status: response.data.status, 
-      user: response.data.data?.user?.correo 
+
+    console.log('✅ Login exitoso:', {
+      status: response.data.status,
+      user: response.data.data?.user?.correo
     });
-    
+
     // Guardar el token y la información del usuario
     if (response.data.status === 'success' && response.data.data.accessToken) {
       await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, response.data.data.accessToken);
       await AsyncStorage.setItem('refreshToken', response.data.data.refreshToken);
       await AsyncStorage.setItem('userInfo', JSON.stringify(response.data.data.user));
-      
+
       // Establecer el token en los headers por defecto
       this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.data.accessToken}`;
+
+      console.log(`🔑 Token guardado con clave: ${Config.AUTH.TOKEN_KEY}`);
     }
-    
+
     return response.data;
   }
 
@@ -114,13 +117,22 @@ class ApiService {
   // Limpiar sesión local sin llamar al backend (para tokens expirados)
   async clearSession(): Promise<void> {
     try {
-      await AsyncStorage.removeItem(Config.AUTH.TOKEN_KEY);
-      await AsyncStorage.removeItem('refreshToken');
-      await AsyncStorage.removeItem('userInfo');
+      console.log('🧹 Limpiando sesión del apiService...');
+      // Limpiar todas las claves de autenticación posibles
+      await AsyncStorage.multiRemove([
+        Config.AUTH.TOKEN_KEY,  // 'authToken'
+        'refreshToken',
+        'userInfo',
+        'user',              // Para compatibilidad
+        'accessToken'        // Para compatibilidad
+      ]);
+
+      // Limpiar headers de autorización
       delete this.api.defaults.headers.common['Authorization'];
-      console.log('🧹 Sesión local limpiada');
+
+      console.log('✅ Sesión local limpiada completamente');
     } catch (e) {
-      console.log('Error limpiando sesión local', e);
+      console.error('❌ Error limpiando sesión local:', e);
     }
   }
 
@@ -138,19 +150,30 @@ class ApiService {
     }
   }
 
+  // Función para verificar el estado del token
+  async checkTokenStatus(): Promise<void> {
+    const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
+    const userInfo = await AsyncStorage.getItem('userInfo');
+
+    console.log('🔍 Estado del token:');
+    console.log('  - Token:', token ? `${token.substring(0, 20)}...` : 'NO ENCONTRADO');
+    console.log('  - UserInfo:', userInfo ? 'ENCONTRADO' : 'NO ENCONTRADO');
+    console.log('  - Headers Authorization:', this.api.defaults.headers.common['Authorization'] || 'NO ESTABLECIDO');
+  }
+
   async getProfile(): Promise<User> {
-  const response = await this.api.get('/auth/profile');
+    const response = await this.api.get('/auth/profile');
     console.log('✅ Perfil obtenido:', response.data);
-    
+
     if (response.data.status === 'success') {
       return response.data.data.usuario;
     }
-    
+
     throw new Error('Error al obtener perfil');
   }
 
   async setToken(token: string): Promise<void> {
-  await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, token);
+    await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, token);
     this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     console.log('🔑 Token establecido correctamente');
   }
@@ -159,7 +182,7 @@ class ApiService {
   async setDemoToken(): Promise<void> {
     // Token de ejemplo - reemplazar con uno real o implementar login
     const demoToken = 'demo-token-for-testing';
-  await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, demoToken);
+    await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, demoToken);
     console.log('🔑 Token de demo establecido');
   }
 
@@ -323,15 +346,15 @@ class ApiService {
 
   // Clients endpoints
   async getMyInfo(): Promise<Client> {
-  const response: AxiosResponse<ApiResponse<Client>> = await this.api.get(Config.ENDPOINTS.CLIENTS_ME);
-  const raw = response.data.data as any;
-  return this.mapClientFromApi(raw);
+    const response: AxiosResponse<ApiResponse<Client>> = await this.api.get(Config.ENDPOINTS.CLIENTS_ME);
+    const raw = response.data.data as any;
+    return this.mapClientFromApi(raw);
   }
 
   async getMyBeneficiaries(): Promise<Client[]> {
-  const response: AxiosResponse<ApiResponse<any[]>> = await this.api.get(Config.ENDPOINTS.CLIENTS_BENEFICIARIES);
-  const raw = response.data.data || [];
-  return raw.map((b: any) => this.mapClientFromApi(b.persona_beneficiaria || b));
+    const response: AxiosResponse<ApiResponse<any[]>> = await this.api.get(Config.ENDPOINTS.CLIENTS_BENEFICIARIES);
+    const raw = response.data.data || [];
+    return raw.map((b: any) => this.mapClientFromApi(b.persona_beneficiaria || b));
   }
 
   async getClients(params?: { search?: string; page?: number; limit?: number }): Promise<any> {
@@ -374,7 +397,7 @@ class ApiService {
   }
 
   async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {
-    const response: AxiosResponse<ApiResponse<any>> = 
+    const response: AxiosResponse<ApiResponse<any>> =
       await this.api.get(`${Config.ENDPOINTS.CLIENTS}/check-user/${tipoDocumento}/${numeroDocumento}`);
     const raw = response.data.data;
     return {
@@ -384,22 +407,22 @@ class ApiService {
   }
 
   async getClient(id: string): Promise<Client> {
-  const response: AxiosResponse<ApiResponse<any>> = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
-  return this.mapClientFromApi(response.data.data);
+    const response: AxiosResponse<ApiResponse<any>> = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+    return this.mapClientFromApi(response.data.data);
   }
 
   async createClient(client: CreateClientRequest): Promise<Client> {
-  const response: AxiosResponse<ApiResponse<any>> = await this.api.post(Config.ENDPOINTS.CLIENTS, client as any);
-  return this.mapClientFromApi(response.data.data);
+    const response: AxiosResponse<ApiResponse<any>> = await this.api.post(Config.ENDPOINTS.CLIENTS, client as any);
+    return this.mapClientFromApi(response.data.data);
   }
 
   async updateClient(id: string, client: Partial<CreateClientRequest>): Promise<Client> {
-  const response: AxiosResponse<ApiResponse<any>> = await this.api.put(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`, client as any);
-  return this.mapClientFromApi(response.data.data);
+    const response: AxiosResponse<ApiResponse<any>> = await this.api.put(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`, client as any);
+    return this.mapClientFromApi(response.data.data);
   }
 
   async deleteClient(id: string): Promise<void> {
-  await this.api.delete(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+    await this.api.delete(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
   }
 }
 

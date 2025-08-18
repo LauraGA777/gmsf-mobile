@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../components';
 import { Colors, Shadows } from '../constants/colors';
-import { Spacing, FontSize, FontWeight, BorderRadius } from '../constants/layout';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
 import { User } from '../types';
 
@@ -164,19 +164,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
         <View style={styles.footer}>
           <Pressable
             style={styles.logoutButton}
-            onPress={() => {
-              Alert.alert(
-                'Confirmar', 
-                '¿Estás seguro de que quieres cerrar sesión?',
-                [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { 
-                    text: 'Cerrar Sesión', 
-                    style: 'destructive',
-                    onPress: onLogout || (() => Alert.alert('Info', 'Función de logout no disponible'))
-                  }
-                ]
-              );
+            onPress={async () => {
+              if (onLogout) {
+                try {
+                  await onLogout();
+                } catch (error) {
+                  console.error('Error durante logout:', error);
+                  Alert.alert('Error', 'Hubo un problema al cerrar sesión, pero se limpiaron los datos locales.');
+                }
+              } else {
+                Alert.alert('Error', 'Función de logout no disponible');
+              }
             }}
           >
             <MaterialIcons name="logout" size={20} color={Colors.error} />

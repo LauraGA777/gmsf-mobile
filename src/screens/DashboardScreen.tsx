@@ -1,20 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
   Alert,
   Dimensions,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+import { BarChart, LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatCard, Card, Loading } from '../components';
+import { Card, Loading, StatCard } from '../components';
 import { Colors } from '../constants/colors';
-import { Spacing, FontSize, FontWeight, BorderRadius } from '../constants/layout';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
-import { DashboardStats, OptimizedStats } from '../types';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -27,27 +26,30 @@ export const DashboardScreen: React.FC = () => {
   const loadData = async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
-      
+
       console.log('🔄 Cargando datos del dashboard...');
-      
+
+      // Verificar el estado del token antes de hacer las llamadas
+      await apiService.checkTokenStatus();
+
       const [statsData, optimizedData] = await Promise.all([
         apiService.getDashboardStats(),
         apiService.getOptimizedStats(),
       ]);
-      
+
       console.log('📊 Datos del dashboard cargados:', { statsData, optimizedData });
-      
+
       setStats(statsData);
       setOptimizedStats(optimizedData);
     } catch (error: any) {
       console.error('💥 Error loading dashboard data:', error);
-      
+
       // Verificar si es un error de red o del servidor
       const isNetworkError = !error.response;
       const statusCode = error.response?.status;
-      
+
       let errorMessage = 'No se pudieron cargar los datos del dashboard';
-      
+
       if (isNetworkError) {
         errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
       } else if (statusCode === 404) {
@@ -55,9 +57,9 @@ export const DashboardScreen: React.FC = () => {
       } else if (statusCode === 500) {
         errorMessage = 'Error interno del servidor. Intenta nuevamente.';
       }
-      
+
       Alert.alert('Error', errorMessage);
-      
+
       // Solo usar datos de ejemplo si la API falla completamente
       console.log('🔧 Usando datos de ejemplo para desarrollo...');
       setStats({
@@ -67,7 +69,7 @@ export const DashboardScreen: React.FC = () => {
         membresías: 1,
         clientes: 1,
       });
-      
+
       setOptimizedStats({
         asistenciasPorDia: [
           { fecha: '2024-01-01', total: 25, mañana: 15, promedio: 20 },
@@ -129,7 +131,7 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const assistanceData = {
-    labels: optimizedStats?.charts?.attendance?.map((item: any) => 
+    labels: optimizedStats?.charts?.attendance?.map((item: any) =>
       item.date ? new Date(item.date).toLocaleDateString('es', { weekday: 'short' }) : item.label || 'N/A'
     ) || ['Sin datos'],
     datasets: [
@@ -142,7 +144,7 @@ export const DashboardScreen: React.FC = () => {
   };
 
   const incomeData = {
-    labels: optimizedStats?.charts?.revenue?.map((item: any) => 
+    labels: optimizedStats?.charts?.revenue?.map((item: any) =>
       item.date ? new Date(item.date).toLocaleDateString('es', { day: 'numeric' }) : item.label || 'N/A'
     ) || ['Sin datos'],
     datasets: [

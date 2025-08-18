@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer } from '@react-navigation/native';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DashboardScreen, TrainersScreen, ClientsScreen, ProfileScreen, LoginScreen } from './src/screens';
 import { Colors } from './src/constants/colors';
-import { RootTabParamList } from './src/types';
+import { ClientsScreen, DashboardScreen, LoginScreen, ProfileScreen, TrainersScreen } from './src/screens';
 import { apiService } from './src/services/api';
+import { RootTabParamList } from './src/types';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
@@ -22,44 +24,113 @@ export default function App(): React.JSX.Element {
 
   const checkAuthStatus = async () => {
     try {
-      const token = await apiService.getStoredToken();
-      if (token) {
-        // Establecer el token y verificar que sea válido
-        await apiService.setToken(token);
+      setIsCheckingAuth(true);
+
+      // Verificar si existen datos de autenticación almacenados
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedAccessToken = await AsyncStorage.getItem('accessToken');
+      const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
+
+      console.log('🔍 Verificando estado de autenticación...');
+
+      if (storedUser && storedAccessToken && storedRefreshToken) {
         try {
-          await apiService.getProfile(); // Verificar token con el endpoint de perfil
-          setIsAuthenticated(true);
-        } catch (error) {
-          console.log('Token inválido, limpiando sesión local');
-          await apiService.clearSession();
+          const parsedUser = JSON.parse(storedUser);
+          console.log('👤 Usuario encontrado en storage:', parsedUser.correo);
+
+          // Establecer el token en el servicio API
+          await apiService.setToken(storedAccessToken);
+
+          // Verificar que el token sea válido haciendo una petición de prueba
+          try {
+            await apiService.getProfile();
+            console.log('✅ Token válido, usuario autenticado');
+            setIsAuthenticated(true);
+          } catch (apiError) {
+            console.log('❌ Token inválido, limpiando sesión');
+            await clearAuthData();
+            setIsAuthenticated(false);
+          }
+        } catch (parseError) {
+          console.log('❌ Error parseando datos de usuario, limpiando sesión');
+          await clearAuthData();
           setIsAuthenticated(false);
         }
       } else {
+        console.log('ℹ️ No hay datos de autenticación almacenados');
         setIsAuthenticated(false);
       }
     } catch (error) {
-      console.error('Error verificando autenticación:', error);
+      console.error('💥 Error verificando autenticación:', error);
       setIsAuthenticated(false);
     } finally {
       setIsCheckingAuth(false);
     }
   };
 
+  const clearAuthData = async () => {
+    try {
+      console.log('🧹 Limpiando datos de autenticación...');
+      await AsyncStorage.multiRemove([
+        'authToken',      // Config.AUTH.TOKEN_KEY
+        'user',           // Para compatibilidad con LoginScreen
+        'accessToken',    // Para compatibilidad con LoginScreen  
+        'refreshToken',   // Token de refresco
+        'userInfo'        // Info del usuario en apiService
+      ]);
+      await apiService.clearSession();
+      console.log('✅ Datos de autenticación limpiados completamente');
+    } catch (error) {
+      console.error('Error limpiando datos de autenticación:', error);
+    }
+  };
+
   const handleLoginSuccess = () => {
+    console.log('🎉 Login exitoso, actualizando estado de autenticación');
+    console.log('📊 Estado actual isAuthenticated:', isAuthenticated);
     setIsAuthenticated(true);
+    console.log('✅ Estado cambiado a autenticado - debería redireccionar');
   };
 
   const handleLogout = async () => {
-    await apiService.logout();
-    setIsAuthenticated(false);
+    console.log('🚪 Cerrando sesión...');
+    try {
+      // Intentar hacer logout en el servidor
+      await apiService.logout();
+      console.log('✅ Logout exitoso en el servidor');
+    } catch (error) {
+      console.warn('⚠️ Error en logout del servidor, continuando con logout local:', error);
+      // Continuar con logout local aunque falle el servidor
+    }
+
+    try {
+      // Limpiar datos locales siempre
+      await clearAuthData();
+      setIsAuthenticated(false);
+      console.log('✅ Sesión cerrada exitosamente');
+    } catch (error) {
+      console.error('❌ Error crítico en logout local:', error);
+      // Forzar logout aunque haya errores
+      setIsAuthenticated(false);
+    }
   };
 
+  // Pantalla de carga mientras se verifica la autenticación
   if (isCheckingAuth) {
-    // Mostrar una pantalla de carga mientras se verifica la autenticación
-    return <SafeAreaProvider><></></SafeAreaProvider>;
+    return (
+      <SafeAreaProvider>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Verificando autenticación...</Text>
+        </View>
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
+    );
   }
 
+  // Si no está autenticado, mostrar LoginScreen
   if (!isAuthenticated) {
+    console.log('🔑 Mostrando LoginScreen - Usuario no autenticado');
     return (
       <SafeAreaProvider>
         <LoginScreen onLoginSuccess={handleLoginSuccess} />
@@ -67,6 +138,9 @@ export default function App(): React.JSX.Element {
       </SafeAreaProvider>
     );
   }
+
+  // Si está autenticado, mostrar la aplicación principal
+  console.log('🏠 Mostrando aplicación principal - Usuario autenticado');
 
   return (
     <SafeAreaProvider>
@@ -80,7 +154,7 @@ export default function App(): React.JSX.Element {
               backgroundColor: Colors.surface,
               borderTopColor: Colors.border,
               // Más alto y con padding para no chocar con nav bar de Android
-              paddingBottom: 14,
+              paddingBottom: 6,
               paddingTop: 6,
               height: 68,
             },
@@ -137,3 +211,18 @@ export default function App(): React.JSX.Element {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+});
