@@ -227,7 +227,7 @@ export const TrainersScreen: React.FC = () => {
         <Pressable
           style={[
             styles.actionButton,
-            { backgroundColor: trainer.activo ? Colors.warning : Colors.success }
+            { backgroundColor: trainer.activo ? Colors.primary : Colors.success }
           ]}
           onPress={() => toggleTrainerStatus(trainer)}
         >

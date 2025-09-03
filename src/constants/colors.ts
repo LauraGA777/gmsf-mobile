@@ -1,38 +1,39 @@
 export const Colors = {
-  // Colores principales basados en el diseño web
-  primary: '#1e40af', // Azul principal
-  secondary: '#059669', // Verde
-  accent: '#dc2626', // Rojo para alertas
-  
+  // Colores principales actualizados según tu paleta
+  primary: '#1a1a1a', // Gris oscuro principal
+  secondary: '#10B981', // Verde
+  accent: '#dc2626', // Rojo para alertas (mantenido)
+
   // Colores de fondo
-  background: '#f8fafc',
-  surface: '#ffffff',
-  cardBackground: '#ffffff',
-  
+  background: '#F8F9FA', // Gris claro
+  surface: '#FFFFFF', // Blanco
+  cardBackground: '#FFFFFF', // Blanco
+
   // Colores de texto
-  text: '#1f2937',
-  textSecondary: '#6b7280',
-  textLight: '#9ca3af',
-  
+  text: '#1a1a1a', // Gris oscuro principal
+  textSecondary: '#6B7280', // Gris medio
+  textLight: '#9CA3AF', // Gris medio claro
+
   // Colores de estado
-  success: '#10b981',
+  success: '#10B981', // Verde principal
   warning: '#f59e0b',
   error: '#ef4444',
   info: '#3b82f6',
-  
+
   // Colores adicionales
-  border: '#e5e7eb',
-  divider: '#f3f4f6',
+  border: '#E5E7EB', // Gris borde
+  divider: '#F3F4F6', // Gris hover
   shadow: '#00000010',
-  
-  // Gradientes
-  gradientPrimary: ['#1e40af', '#3b82f6'],
-  gradientSecondary: ['#059669', '#10b981'],
+  hover: '#F3F4F6', // Gris hover
+
+  // Gradientes actualizados
+  gradientPrimary: ['#1a1a1a', '#3a3a3a'],
+  gradientSecondary: ['#10B981', '#059669'],
   gradientAccent: ['#dc2626', '#ef4444'],
-  
+
   // Colores específicos del dashboard
   chartBlue: '#3b82f6',
-  chartGreen: '#10b981',
+  chartGreen: '#10B981',
   chartOrange: '#f59e0b',
   chartPurple: '#8b5cf6',
   chartPink: '#ec4899',

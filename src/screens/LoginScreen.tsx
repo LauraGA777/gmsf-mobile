@@ -500,17 +500,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                       <Text style={styles.contactLink}>Contacta al administrador</Text>
                     </TouchableOpacity>
                   </View>
-
-                  {/* Botón temporal para limpiar cache (solo para pruebas) */}
-                  <View style={styles.debugContainer}>
-                    <TouchableOpacity
-                      style={styles.clearCacheButton}
-                      onPress={clearAllCache}
-                      disabled={isLoading}
-                    >
-                      <Text style={styles.clearCacheText}>🧹 Limpiar Cache (Pruebas)</Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
               </>
             )}
@@ -531,9 +520,15 @@ const styles = StyleSheet.create({
   keyboardAvoid: {
     flex: 1,
   },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
+    minHeight: '100%',
   },
   loadingContainer: {
     flex: 1,
