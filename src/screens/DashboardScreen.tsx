@@ -1,73 +1,203 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
+  Animated,
   Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Loading, StatCard } from '../components';
+import { Card, Loading } from '../components';
 import { Colors } from '../constants/colors';
 import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
-import { apiService } from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Componente de tarjeta de resumen simple
-const SummaryCard = ({ title, items }: { title: string, items: Array<{ label: string, value: string | number, color?: string }> }) => (
-  <View style={styles.summaryCard}>
-    <Text style={styles.summaryTitle}>{title}</Text>
-    {items.map((item, index) => (
-      <View key={index} style={styles.summaryItem}>
-        <View style={[styles.colorDot, { backgroundColor: item.color || Colors.primary }]} />
-        <Text style={styles.summaryLabel}>{item.label}</Text>
-        <Text style={styles.summaryValue}>{item.value}</Text>
+// Componente de tarjeta de ingresos con indicador de crecimiento
+const RevenueCard = ({ dailyRevenue, growth }: { dailyRevenue: number, growth: number }) => {
+  const isPositive = growth >= 0;
+  const growthColor = isPositive ? Colors.success : Colors.error;
+  const growthIcon = isPositive ? 'trending-up' : 'trending-down';
+
+  return (
+    <View style={styles.revenueCard}>
+      <View style={styles.revenueHeader}>
+        <Text style={styles.revenueTitle}>Ingresos Diarios</Text>
+        <View style={[styles.growthIndicator, { backgroundColor: growthColor }]}>
+          <Ionicons name={growthIcon} size={16} color="white" />
+          <Text style={styles.growthText}>{growth > 0 ? '+' : ''}{growth}%</Text>
+        </View>
       </View>
-    ))}
+      <Text style={styles.revenueAmount}>
+        {new Intl.NumberFormat('es-CO', {
+          style: 'currency',
+          currency: 'COP',
+          minimumFractionDigits: 0,
+        }).format(dailyRevenue)}
+      </Text>
+      <Text style={styles.revenueSubtitle}>Comparado con ayer</Text>
+    </View>
+  );
+};
+
+// Componente de gráfico de barras para membresías por mes
+const MembershipBarChart = ({ data }: { data: Array<{ month: string, value: number }> }) => {
+  const maxValue = Math.max(...data.map(item => item.value));
+  const [animatedValues] = useState(data.map(() => new Animated.Value(0)));
+
+  useEffect(() => {
+    const animations = animatedValues.map((animatedValue, index) =>
+      Animated.timing(animatedValue, {
+        toValue: 1,
+        duration: 800 + (index * 100),
+        useNativeDriver: false,
+      })
+    );
+
+    Animated.stagger(100, animations).start();
+  }, []);
+
+  return (
+    <View style={styles.chartContainer}>
+      <Text style={styles.chartTitle}>Membresías por Mes (Enero - Junio)</Text>
+      <View style={styles.barsContainer}>
+        {data.map((item, index) => (
+          <View key={index} style={styles.barItem}>
+            <View style={styles.barWrapper}>
+              <Animated.View
+                style={[
+                  styles.bar,
+                  {
+                    height: animatedValues[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, (item.value / maxValue) * 120]
+                    }),
+                    backgroundColor: Colors.primary
+                  }
+                ]}
+              />
+              <Text style={styles.barValueText}>{item.value}</Text>
+            </View>
+            <Text style={styles.barLabel}>{item.month}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// Componente de membresía más popular
+const PopularMembershipCard = () => (
+  <View style={styles.popularCard}>
+    <View style={styles.popularHeader}>
+      <Text style={styles.popularTitle}>Membresía Más Popular</Text>
+      <View style={styles.popularBadge}>
+        <Text style={styles.popularBadgeText}>TOP</Text>
+      </View>
+    </View>
+    <View style={styles.popularContent}>
+      <Text style={styles.popularName}>Premium</Text>
+      <Text style={styles.popularStats}>156 miembros activos</Text>
+      <Text style={styles.popularRevenue}>$850,000 COP/mes</Text>
+    </View>
+    <View style={styles.popularFeatures}>
+      <Text style={styles.featureText}>✓ Acceso 24/7</Text>
+      <Text style={styles.featureText}>✓ Entrenador personal</Text>
+      <Text style={styles.featureText}>✓ Clases grupales</Text>
+    </View>
   </View>
 );
 
+// Componente de tarjeta de acceso rápido
+const QuickAccessCard = ({ title, count, icon, color, onPress }: {
+  title: string, count: number, icon: string, color: string, onPress: () => void
+}) => (
+  <TouchableOpacity style={[styles.quickAccessCard, { borderLeftColor: color }]} onPress={onPress}>
+    <View style={styles.quickAccessHeader}>
+      <Ionicons name={icon as any} size={24} color={color} />
+      <Text style={styles.quickAccessCount}>{count}</Text>
+    </View>
+    <Text style={styles.quickAccessTitle}>{title}</Text>
+    <View style={styles.quickAccessFooter}>
+      <Text style={styles.quickAccessAction}>Ver todos</Text>
+      <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+    </View>
+  </TouchableOpacity>
+);
+
+// Componente de navegación lateral
+const SideNavigation = ({ isVisible, onClose }: { isVisible: boolean, onClose: () => void }) => {
+  const menuItems = [
+    { title: 'Dashboard', icon: 'home', screen: 'Dashboard' },
+    { title: 'Usuarios', icon: 'people', screen: 'Users' },
+    { title: 'Entrenadores', icon: 'fitness', screen: 'Trainers' },
+    { title: 'Clientes', icon: 'person', screen: 'Clients' },
+    { title: 'Membresías', icon: 'card', screen: 'Memberships' },
+    { title: 'Pagos', icon: 'wallet', screen: 'Payments' },
+    { title: 'Reportes', icon: 'bar-chart', screen: 'Reports' },
+    { title: 'Configuración', icon: 'settings', screen: 'Settings' },
+  ];
+
+  if (!isVisible) return null;
+
+  return (
+    <View style={styles.sideNavOverlay}>
+      <TouchableOpacity style={styles.sideNavBackdrop} onPress={onClose} />
+      <View style={styles.sideNavContainer}>
+        <View style={styles.sideNavHeader}>
+          <Text style={styles.sideNavTitle}>GMSF Mobile</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.sideNavContent}>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity key={index} style={styles.sideNavItem} onPress={onClose}>
+              <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
+              <Text style={styles.sideNavItemText}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  );
+};
+
 export const DashboardScreen: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
-  const [optimizedStats, setOptimizedStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sideNavVisible, setSideNavVisible] = useState(false);
 
   const loadData = async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
 
-      console.log('🔄 Cargando datos del dashboard...');
-      await apiService.checkTokenStatus();
-
-      const [statsData, optimizedData] = await Promise.all([
-        apiService.getDashboardStats(),
-        apiService.getOptimizedStats(),
-      ]);
-
-      setStats(statsData);
-      setOptimizedStats(optimizedData);
-    } catch (error: any) {
-      console.error('💥 Error loading dashboard data:', error);
-
-      // Datos de ejemplo para la presentación
+      // Datos de ejemplo realistas
       setStats({
-        attendance: { total: 125, today: 15, thisWeek: 95, avgDaily: 18 },
-        contracts: { totalContracts: 45, activeContracts: 38, totalRevenue: 2450000, periodRevenue: 850000, newThisMonth: 5 },
-        memberships: { totalMemberships: 32, activeMemberships: 28, expiringSoon: 4, newThisMonth: 3 },
-        clients: { totalClients: 67, activeClients: 58, newThisMonth: 8, vipClients: 12 },
-      });
-
-      setOptimizedStats({
-        weeklyTrends: {
-          attendance: { current: 95, previous: 87, change: '+9.2%' },
-          revenue: { current: 850000, previous: 720000, change: '+18.1%' },
-          newClients: { current: 8, previous: 5, change: '+60%' },
-          retention: { current: 94, previous: 91, change: '+3.3%' }
+        dailyRevenue: 2450000,
+        revenueGrowth: 12.5,
+        membershipsByMonth: [
+          { month: 'Ene', value: 45 },
+          { month: 'Feb', value: 52 },
+          { month: 'Mar', value: 48 },
+          { month: 'Abr', value: 67 },
+          { month: 'May', value: 73 },
+          { month: 'Jun', value: 85 },
+        ],
+        quickAccess: {
+          users: 245,
+          trainers: 12,
+          clients: 189,
         }
       });
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -83,12 +213,9 @@ export const DashboardScreen: React.FC = () => {
     loadData(true);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(value);
+  const handleQuickAccess = (type: string) => {
+    console.log(`Navigate to ${type}`);
+    // Aquí implementarías la navegación
   };
 
   if (loading) {
@@ -97,147 +224,83 @@ export const DashboardScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header fijo visible */}
+      <View style={styles.fixedHeader}>
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={() => setSideNavVisible(true)}
+        >
+          <Ionicons name="menu" size={28} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Dashboard</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>📊 Panel de Control</Text>
-          <Text style={styles.subtitle}>Resumen ejecutivo del gimnasio</Text>
+        {/* Tarjeta de ingresos diarios */}
+        <View style={styles.section}>
+          <RevenueCard
+            dailyRevenue={stats?.dailyRevenue || 0}
+            growth={stats?.revenueGrowth || 0}
+          />
         </View>
 
-        {/* Stats Cards Principales */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <StatCard
-                title="Asistencias"
-                value={stats?.attendance?.total || 0}
-                icon="people"
-                color={Colors.primary}
-                subtitle={`${stats?.attendance?.today || 0} hoy`}
-              />
-            </View>
-            <View style={styles.statItem}>
-              <StatCard
-                title="Contratos"
-                value={stats?.contracts?.totalContracts || 0}
-                icon="description"
-                color={Colors.success}
-                subtitle={`${stats?.contracts?.activeContracts || 0} activos`}
-              />
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.fullWidth}>
-              <StatCard
-                title="Ingresos del período"
-                value={formatCurrency(stats?.contracts?.totalRevenue || 0)}
-                icon="attach-money"
-                color={Colors.warning}
-                subtitle={`${formatCurrency(stats?.contracts?.periodRevenue || 0)} este período`}
-              />
-            </View>
-          </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <StatCard
-                title="Membresías"
-                value={stats?.memberships?.totalMemberships || 0}
-                icon="card-membership"
-                color={Colors.chartPurple}
-                subtitle={`${stats?.memberships?.activeMemberships || 0} activas`}
-              />
-            </View>
-            <View style={styles.statItem}>
-              <StatCard
-                title="Clientes"
-                value={stats?.clients?.totalClients || 0}
-                icon="group-add"
-                color={Colors.primary}
-                subtitle={`${stats?.clients?.activeClients || 0} activos`}
-              />
-            </View>
-          </View>
+        {/* Gráfico de membresías por mes */}
+        <View style={styles.section}>
+          <Card title="" subtitle="">
+            <MembershipBarChart data={stats?.membershipsByMonth || []} />
+          </Card>
         </View>
 
-        {/* Resumen de Asistencias */}
-        <Card title="📈 Resumen de Asistencias" subtitle="Estadísticas de asistencia semanal">
-          <SummaryCard
-            title="Esta Semana"
-            items={[
-              { label: 'Total asistencias', value: stats?.attendance?.thisWeek || 0, color: Colors.chartBlue },
-              { label: 'Promedio diario', value: stats?.attendance?.avgDaily || 0, color: Colors.primary },
-              { label: 'Asistencias hoy', value: stats?.attendance?.today || 0, color: Colors.success },
-              { label: 'Tendencia semanal', value: optimizedStats?.weeklyTrends?.attendance?.change || '+0%', color: Colors.warning }
-            ]}
-          />
-        </Card>
+        {/* Membresía más popular */}
+        <View style={styles.section}>
+          <PopularMembershipCard />
+        </View>
 
-        {/* Resumen Financiero */}
-        <Card title="💰 Resumen Financiero" subtitle="Ingresos y contratos">
-          <SummaryCard
-            title="Este Mes"
-            items={[
-              { label: 'Ingresos totales', value: formatCurrency(stats?.contracts?.totalRevenue || 0), color: Colors.success },
-              { label: 'Ingresos del período', value: formatCurrency(stats?.contracts?.periodRevenue || 0), color: Colors.chartGreen },
-              { label: 'Contratos nuevos', value: stats?.contracts?.newThisMonth || 0, color: Colors.primary },
-              { label: 'Crecimiento', value: optimizedStats?.weeklyTrends?.revenue?.change || '+0%', color: Colors.warning }
-            ]}
-          />
-        </Card>
-
-        {/* Resumen de Clientes */}
-        <Card title="👥 Resumen de Clientes" subtitle="Membresías y retención">
-          <SummaryCard
-            title="Estado Actual"
-            items={[
-              { label: 'Clientes totales', value: stats?.clients?.totalClients || 0, color: Colors.primary },
-              { label: 'Clientes activos', value: stats?.clients?.activeClients || 0, color: Colors.success },
-              { label: 'Clientes VIP', value: stats?.clients?.vipClients || 0, color: Colors.chartPurple },
-              { label: 'Nuevos este mes', value: stats?.clients?.newThisMonth || 0, color: Colors.chartBlue }
-            ]}
-          />
-        </Card>
-
-        {/* Alertas y Recordatorios */}
-        <Card title="⚠️ Alertas" subtitle="Elementos que requieren atención">
-          <SummaryCard
-            title="Requieren Atención"
-            items={[
-              { label: 'Membresías por vencer', value: stats?.memberships?.expiringSoon || 0, color: Colors.error },
-              { label: 'Contratos por renovar', value: '3', color: Colors.warning },
-              { label: 'Pagos pendientes', value: '2', color: Colors.error },
-              { label: 'Equipos en mantenimiento', value: '1', color: Colors.warning }
-            ]}
-          />
-        </Card>
-
-        {/* Tendencias de la Semana */}
-        <Card title="📊 Tendencias Semanales" subtitle="Comparación vs semana anterior">
-          <SummaryCard
-            title="Comparación Semanal"
-            items={[
-              { label: 'Asistencias', value: optimizedStats?.weeklyTrends?.attendance?.change || '+0%', color: Colors.chartBlue },
-              { label: 'Ingresos', value: optimizedStats?.weeklyTrends?.revenue?.change || '+0%', color: Colors.success },
-              { label: 'Nuevos clientes', value: optimizedStats?.weeklyTrends?.newClients?.change || '+0%', color: Colors.primary },
-              { label: 'Retención', value: optimizedStats?.weeklyTrends?.retention?.change || '+0%', color: Colors.chartPurple }
-            ]}
-          />
-        </Card>
+        {/* Tarjetas de acceso rápido */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Acceso Rápido</Text>
+          <View style={styles.quickAccessGrid}>
+            <QuickAccessCard
+              title="Usuarios"
+              count={stats?.quickAccess?.users || 0}
+              icon="people"
+              color={Colors.primary}
+              onPress={() => handleQuickAccess('users')}
+            />
+            <QuickAccessCard
+              title="Entrenadores"
+              count={stats?.quickAccess?.trainers || 0}
+              icon="fitness"
+              color={Colors.success}
+              onPress={() => handleQuickAccess('trainers')}
+            />
+            <QuickAccessCard
+              title="Clientes"
+              count={stats?.quickAccess?.clients || 0}
+              icon="person"
+              color={Colors.warning}
+              onPress={() => handleQuickAccess('clients')}
+            />
+          </View>
+        </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            🕒 Última actualización: {new Date().toLocaleString('es-CO')}
-          </Text>
-          <Text style={styles.footerSubtext}>
-            Dashboard simplificado para máximo rendimiento
+            Última actualización: {new Date().toLocaleString('es-CO')}
           </Text>
         </View>
       </ScrollView>
+
+      {/* Navegación lateral */}
+      <SideNavigation
+        isVisible={sideNavVisible}
+        onClose={() => setSideNavVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -247,37 +310,315 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+
+  // Header fijo y visible
+  fixedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.divider,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  menuButton: {
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.background,
+  },
+  headerTitle: {
+    fontSize: FontSize.xxl,
+    fontWeight: FontWeight.bold,
+    color: Colors.text,
+  },
+  headerSpacer: {
+    width: 44, // Mismo ancho que el botón de menú para centrar el título
+  },
+
   scrollView: {
     flex: 1,
   },
-  header: {
+  section: {
     padding: Spacing.md,
-    paddingBottom: Spacing.sm,
   },
-  title: {
+  sectionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.text,
+    marginBottom: Spacing.md,
+  },
+
+  // Revenue Card
+  revenueCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  revenueHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  revenueTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.semibold,
+    color: Colors.text,
+  },
+  growthIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.md,
+  },
+  growthText: {
+    color: 'white',
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    marginLeft: 4,
+  },
+  revenueAmount: {
     fontSize: FontSize.xxxl,
     fontWeight: FontWeight.bold,
     color: Colors.text,
     marginBottom: Spacing.xs,
   },
-  subtitle: {
-    fontSize: FontSize.md,
+  revenueSubtitle: {
+    fontSize: FontSize.sm,
     color: Colors.textSecondary,
   },
-  statsGrid: {
+
+  // Chart
+  chartContainer: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
     padding: Spacing.md,
   },
-  statsRow: {
+  chartTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.semibold,
+    color: Colors.text,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  barsContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    height: 140,
+    paddingHorizontal: Spacing.sm,
+  },
+  barItem: {
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 2,
+  },
+  barWrapper: {
+    height: 120,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    width: 32,
+    position: 'relative',
+  },
+  bar: {
+    width: 32,
+    borderRadius: 4,
+    minHeight: 5,
+  },
+  barValueText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: FontSize.xs,
+    color: Colors.text,
+    fontWeight: FontWeight.bold,
+  },
+  barLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    fontWeight: FontWeight.medium,
+  },
+
+  // Popular Membership
+  popularCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  popularHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  popularTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.semibold,
+    color: Colors.text,
+  },
+  popularBadge: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  popularBadgeText: {
+    color: 'white',
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
+  popularContent: {
+    marginBottom: Spacing.md,
+  },
+  popularName: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+  },
+  popularStats: {
+    fontSize: FontSize.md,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  popularRevenue: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: Colors.success,
+  },
+  popularFeatures: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+    paddingTop: Spacing.md,
+  },
+  featureText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+
+  // Quick Access
+  quickAccessGrid: {
+    gap: Spacing.sm,
+  },
+  quickAccessCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderLeftWidth: 3,
+    marginBottom: Spacing.sm,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  quickAccessHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  statItem: {
+  quickAccessCount: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+    color: Colors.text,
+  },
+  quickAccessTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  quickAccessFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickAccessAction: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: FontWeight.medium,
+  },
+
+  // Side Navigation
+  sideNavOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+  sideNavBackdrop: {
     flex: 1,
-    marginHorizontal: Spacing.xs,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  fullWidth: {
-    marginHorizontal: Spacing.xs,
+  sideNavContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 280,
+    backgroundColor: Colors.surface,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 10,
   },
+  sideNavHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+    backgroundColor: Colors.primary,
+  },
+  sideNavTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
+    color: 'white',
+  },
+  sideNavContent: {
+    flex: 1,
+    padding: Spacing.sm,
+  },
+  sideNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.xs,
+  },
+  sideNavItemText: {
+    flex: 1,
+    fontSize: FontSize.md,
+    color: Colors.text,
+    marginLeft: Spacing.md,
+    fontWeight: FontWeight.medium,
+  },
+
   footer: {
     padding: Spacing.md,
     alignItems: 'center',
@@ -285,48 +626,5 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: FontSize.sm,
     color: Colors.textLight,
-    marginBottom: Spacing.xs,
-  },
-  footerSubtext: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-  },
-
-  // Summary Card Styles
-  summaryCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginVertical: Spacing.sm,
-  },
-  summaryTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  colorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: Spacing.sm,
-  },
-  summaryLabel: {
-    flex: 1,
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
-  },
-  summaryValue: {
-    fontSize: FontSize.md,
-    color: Colors.text,
-    fontWeight: FontWeight.bold,
   },
 });
