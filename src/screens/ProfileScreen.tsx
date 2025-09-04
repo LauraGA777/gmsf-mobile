@@ -10,18 +10,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card } from '../components';
-import { Colors, Shadows } from '../constants/colors';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
+import { Colors } from '../constants/colors';
 import { apiService } from '../services/api';
-import { User } from '../types';
 
 interface ProfileScreenProps {
   onLogout?: () => Promise<void>;
 }
 
+// Componente para iconos mejorado usando MaterialIcons
+const IconField = ({
+  iconName,
+  size = 20,
+  color = Colors.textSecondary
+}: {
+  iconName: keyof typeof MaterialIcons.glyphMap;
+  size?: number;
+  color?: string;
+}) => (
+  <MaterialIcons name={iconName} size={size} color={color} />
+);
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,6 +40,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
   const loadUserProfile = async () => {
     try {
+      setLoading(true);
       // Intentar obtener del perfil de la API
       const profileData = await apiService.getProfile();
       setUser(profileData);
@@ -39,151 +50,335 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       const storedUser = await apiService.getStoredUser();
       if (storedUser) {
         setUser(storedUser);
-      } else {
-        // Datos por defecto si no hay información
-        setUser({
-          id: 1,
-          correo: 'usuario@gmsf.com',
-          nombre: 'Usuario',
-          apellido: 'GMSF',
-          estado: true,
-          id_rol: 1,
-        });
       }
     } finally {
       setLoading(false);
     }
   };
-  const profileOptions = [
-    {
-      icon: 'person' as const,
-      title: 'Mi Información',
-      subtitle: 'Ver y editar datos personales',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'card-membership' as const,
-      title: 'Mi Membresía',
-      subtitle: 'Estado y detalles de membresía',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'history' as const,
-      title: 'Historial de Asistencias',
-      subtitle: 'Ver mis entrenamientos pasados',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'payment' as const,
-      title: 'Métodos de Pago',
-      subtitle: 'Gestionar formas de pago',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'notifications' as const,
-      title: 'Notificaciones',
-      subtitle: 'Configurar alertas y recordatorios',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'help' as const,
-      title: 'Ayuda y Soporte',
-      subtitle: 'Obtener ayuda o reportar problemas',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-    {
-      icon: 'settings' as const,
-      title: 'Configuración',
-      subtitle: 'Ajustes de la aplicación',
-      onPress: () => Alert.alert('Info', 'Función próximamente'),
-    },
-  ];
 
-  const renderProfileOption = (option: typeof profileOptions[0], index: number) => (
-    <Pressable
-      key={index}
-      style={styles.optionContainer}
-      onPress={option.onPress}
-      android_ripple={{ color: Colors.divider }}
-    >
-      <View style={styles.optionIconContainer}>
-        <MaterialIcons name={option.icon} size={24} color={Colors.primary} />
-      </View>
-      <View style={styles.optionContent}>
-        <Text style={styles.optionTitle}>{option.title}</Text>
-        <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
-      </View>
-      <MaterialIcons name="chevron-right" size={20} color={Colors.textLight} />
-    </Pressable>
-  );
+  const getGenderName = (genero?: string): string => {
+    switch (genero) {
+      case 'M':
+        return 'Masculino';
+      case 'F':
+        return 'Femenino';
+      case 'O':
+        return 'Otro';
+      default:
+        return 'No especificado';
+    }
+  };
+
+  const getDocumentTypeName = (tipo?: string): string => {
+    switch (tipo) {
+      case 'CC':
+        return 'C\u00E9dula de Ciudadan\u00EDa';
+      case 'CE':
+        return 'Cédula de Extranjería';
+      case 'TI':
+        return 'Tarjeta de Identidad';
+      case 'PP':
+        return 'Pasaporte';
+      case 'DIE':
+        return 'Documento de Identificación Extranjero';
+      default:
+        return 'No especificado';
+    }
+  };
+
+  const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'No especificada';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return 'Fecha inválida';
+    }
+  };
+
+  const calculateAge = (birthDate?: string): string => {
+    if (!birthDate) return 'No especificada';
+    try {
+      const birth = new Date(birthDate);
+      const today = new Date();
+      const age = today.getFullYear() - birth.getFullYear();
+      const monthDiff = today.getMonth() - birth.getMonth();
+
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+        return `${age - 1} a\u00F1os`;
+      }
+      return `${age} a\u00F1os`;
+    } catch {
+      return 'Edad inválida';
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Cargando perfil...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <Text style={styles.errorText}>No se pudo cargar la información del perfil</Text>
+          <Pressable style={styles.retryButton} onPress={loadUserProfile}>
+            <Text style={styles.retryButtonText}>Intentar nuevamente</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Mi Perfil</Text>
-          <Text style={styles.subtitle}>Gestiona tu cuenta y preferencias</Text>
-        </View>
-
-        <Card style={styles.profileCard}>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.loadingText}>Cargando perfil...</Text>
-            </View>
-          ) : (
-            <View style={styles.profileInfo}>
-              <View style={styles.avatarContainer}>
-                <MaterialIcons name="account-circle" size={80} color={Colors.primary} />
-              </View>
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>
-                  {user?.nombre} {user?.apellido}
-                </Text>
-                <Text style={styles.userEmail}>{user?.correo}</Text>
-                {user?.id_rol && (
-                  <Text style={styles.userRole}>Rol: {user.id_rol === 1 ? 'Administrador' : user.id_rol === 2 ? 'Entrenador' : 'Cliente'}</Text>
-                )}
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: user?.estado ? Colors.success : Colors.error }
-                ]}>
-                  <Text style={styles.statusText}>
-                    {user?.estado ? 'Activo' : 'Inactivo'}
+        <View style={styles.content}>
+          {/* Card Container */}
+          <View style={styles.card}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <MaterialIcons name="account-circle" size={40} color={Colors.primary} />
+                <View style={styles.headerText}>
+                  <Text style={styles.title}>Mi Información Personal</Text>
+                  <Text style={styles.description}>
+                    Información completa de tu perfil en el sistema
                   </Text>
                 </View>
               </View>
             </View>
-          )}
-        </Card>
 
-        <Card title="Opciones de Cuenta">
-          {profileOptions.map(renderProfileOption)}
-        </Card>
+            {/* Content */}
+            <View style={styles.cardContent}>
+              {/* Información Básica */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Información Básica</Text>
 
-        <View style={styles.footer}>
-          <Pressable
-            style={styles.logoutButton}
-            onPress={async () => {
-              if (onLogout) {
-                try {
-                  await onLogout();
-                } catch (error) {
-                  console.error('Error durante logout:', error);
-                  Alert.alert('Error', 'Hubo un problema al cerrar sesión, pero se limpiaron los datos locales.');
-                }
-              } else {
-                Alert.alert('Error', 'Función de logout no disponible');
-              }
-            }}
-          >
-            <MaterialIcons name="logout" size={20} color={Colors.error} />
-            <Text style={styles.logoutText}>Cerrar Sesión</Text>
-          </Pressable>
-        </View>
+                {/* Nombre y Apellido */}
+                <View style={styles.row}>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>
+                      Nombre <Text style={styles.required}>*</Text>
+                    </Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="person" />
+                      <Text style={styles.valueText}>{user.nombre || 'No especificado'}</Text>
+                    </View>
+                  </View>
 
-        <View style={styles.versionInfo}>
-          <Text style={styles.versionText}>GMSF Mobile v1.0.0</Text>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>
+                      Apellido <Text style={styles.required}>*</Text>
+                    </Text>
+                    <View style={styles.fieldValue}>
+                      <Text style={styles.valueText}>{user.apellido || 'No especificado'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Correo Electrónico */}
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>
+                    Correo Electrónico <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                    <IconField iconName="email" />
+                    <Text style={styles.valueText}>{user.correo}</Text>
+                  </View>
+                </View>
+
+                {/* Teléfono y Género */}
+                <View style={styles.row}>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Teléfono</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="phone" />
+                      <Text style={styles.valueText}>{user.telefono || 'No especificado'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Género</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="wc" />
+                      <Text style={styles.valueText}>{getGenderName(user.genero)}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Dirección */}
+                {user.direccion && (
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Dirección</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="location-on" />
+                      <Text style={styles.valueText}>{user.direccion}</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Información de Documento */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Identificación</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Tipo de Documento</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="badge" />
+                      <Text style={styles.valueText}>{getDocumentTypeName(user.tipo_documento)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Número de Documento</Text>
+                    <View style={styles.fieldValue}>
+                      <Text style={styles.valueText}>{user.numero_documento || 'No especificado'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Fecha de Nacimiento y Edad */}
+                <View style={styles.row}>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Fecha de Nacimiento</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="cake" />
+                      <Text style={styles.valueText}>{formatDate(user.fecha_nacimiento)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Edad</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="calendar-today" />
+                      <Text style={styles.valueText}>{calculateAge(user.fecha_nacimiento)}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Información del Sistema */}
+              <View style={styles.sectionContainer}>
+                <Text style={styles.sectionTitle}>Información del Sistema</Text>
+
+                {/* Estado y Asistencias */}
+                <View style={styles.row}>
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Estado</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField
+                        iconName={user.estado ? "check-circle" : "cancel"}
+                        color={user.estado ? Colors.success : Colors.error}
+                      />
+                      <Text style={[
+                        styles.valueText,
+                        { color: user.estado ? Colors.success : Colors.error }
+                      ]}>
+                        {user.estado ? 'Activo' : 'Inactivo'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.fieldContainer}>
+                    <Text style={styles.label}>Asistencias Totales</Text>
+                    <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                      <IconField iconName="fitness-center" />
+                      <Text style={styles.valueText}>
+                        {user.asistencias_totales !== undefined ? user.asistencias_totales : '0'} visitas
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Rol */}
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Rol en el Sistema</Text>
+                  <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                    <IconField iconName="admin-panel-settings" />
+                    <Text style={styles.valueText}>Administrador</Text>
+                  </View>
+                </View>
+
+                {/* Última Actualización */}
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Última Actualización</Text>
+                  <View style={[styles.fieldValue, styles.fieldWithIcon]}>
+                    <IconField iconName="update" />
+                    <Text style={styles.valueText}>{formatDate(user.fecha_actualizacion)}</Text>
+                  </View>
+                </View>
+              </View>
+
+            </View>
+
+            {/* Actions Footer */}
+            <View style={styles.footer}>
+              <Pressable
+                style={styles.refreshButton}
+                onPress={loadUserProfile}
+              >
+                <MaterialIcons name="refresh" size={20} color={Colors.primary} />
+                <Text style={styles.refreshButtonText}>Actualizar Información</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.logoutButton}
+                onPress={async () => {
+                  Alert.alert(
+                    'Cerrar Sesión',
+                    '¿Estás seguro de que deseas cerrar sesión?',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Cerrar Sesión',
+                        style: 'destructive',
+                        onPress: async () => {
+                          if (onLogout) {
+                            try {
+                              await onLogout();
+                            } catch (error) {
+                              console.error('Error durante logout:', error);
+                              Alert.alert(
+                                'Error',
+                                'Hubo un problema al cerrar sesión, pero se limpiaron los datos locales.'
+                              );
+                            }
+                          } else {
+                            Alert.alert('Error', 'Función de logout no disponible');
+                          }
+                        }
+                      }
+                    ]
+                  );
+                }}
+              >
+                <MaterialIcons name="logout" size={20} color={Colors.error} />
+                <Text style={styles.logoutText}>Cerrar Sesión</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Footer minimalista */}
+          <View style={styles.footerContainer}>
+            <Text style={styles.footerText}>© 2024 StrongFit GYM</Text>
+          </View>
+
+          {/* Información de la App - Diseño especial */}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -193,134 +388,287 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#F9FAFB",
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  title: {
-    fontSize: FontSize.xxxl,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-  },
-  profileCard: {
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  profileInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarContainer: {
-    marginRight: Spacing.md,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  userEmail: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-  },
-  userRole: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: FontWeight.medium,
-    marginBottom: Spacing.xs,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    alignSelf: 'flex-start',
-  },
-  statusText: {
-    fontSize: FontSize.xs,
-    color: '#ffffff',
-    fontWeight: FontWeight.medium,
-  },
   loadingContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    padding: Spacing.md,
+    alignItems: 'center',
   },
   loadingText: {
-    fontSize: FontSize.sm,
+    fontSize: 16,
     color: Colors.textSecondary,
-    marginTop: Spacing.xs,
+    marginTop: 16,
   },
-  optionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  optionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primary + '15',
+  errorContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.md,
+    padding: 32,
   },
-  optionContent: {
+  errorText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingVertical: 32,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 24,
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerText: {
+    marginLeft: 16,
     flex: 1,
   },
-  optionTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
   },
-  optionSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+  description: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+  },
+  cardContent: {
+    padding: 24,
+  },
+  sectionContainer: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.primary,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 20,
+  },
+  fieldContainer: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  required: {
+    color: "#EF4444",
+  },
+  labelWithIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  fieldValue: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  fieldWithIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  valueText: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: '500',
   },
   footer: {
-    padding: Spacing.md,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    marginBottom: 12,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.primary,
+    marginLeft: 8,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.error,
-    ...Shadows.small,
   },
   logoutText: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
+    fontSize: 14,
+    fontWeight: "600",
     color: Colors.error,
-    marginLeft: Spacing.sm,
+    marginLeft: 8,
   },
-  versionInfo: {
+  appInfo: {
     alignItems: 'center',
-    paddingBottom: Spacing.lg,
+    marginTop: 32,
+    paddingTop: 16,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
   },
-  versionText: {
-    fontSize: FontSize.sm,
-    color: Colors.textLight,
+  appInfoCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    padding: 16,
+    marginTop: 24,
+  },
+  appInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  appIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appInfoContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  appName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  appSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  versionBadge: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  versionBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  platformInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  platformItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  platformText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginLeft: 4,
+  },
+  platformDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 8,
+  },
+  footerContainer: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  footerText: {
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
+  footerDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D1D5DB",
+    marginHorizontal: 2,
   },
 });

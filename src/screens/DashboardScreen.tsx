@@ -581,12 +581,6 @@ export const DashboardScreen: React.FC = () => {
     const menuItems = [
       { title: 'Dashboard', icon: 'home', screen: 'Dashboard' },
       { title: 'Usuarios', icon: 'people', screen: 'Users' },
-      { title: 'Entrenadores', icon: 'fitness', screen: 'Trainers' },
-      { title: 'Clientes', icon: 'person', screen: 'Clients' },
-      { title: 'Membresías', icon: 'card', screen: 'Memberships' },
-      { title: 'Pagos', icon: 'wallet', screen: 'Payments' },
-      { title: 'Reportes', icon: 'bar-chart', screen: 'Reports' },
-      { title: 'Configuración', icon: 'settings', screen: 'Settings' },
     ];
 
     if (!isVisible) return null;
