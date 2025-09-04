@@ -368,61 +368,27 @@ class ApiService {
       let trainersData: any[] = [];
       let pagination: any = {};
 
-<<<<<<< HEAD
-    // Extraer datos según la estructura de respuesta real
-    if (response.data.success && response.data.data) {
-      // Estructura: { success: true, data: { data: [...], pagination: {...} } }
-      const apiData = response.data.data;
-      trainersData = Array.isArray(apiData.data) ? apiData.data : [];
-      pagination = apiData.pagination || {};
-      console.log('🔍 Entrenadores extraídos del formato success:', trainersData.length);
-    } else if (response.data.status === 'success' && response.data.data) {
-      // Estructura: { status: 'success', data: { data: [...], pagination: {...} } }
-      const apiData = response.data.data;
-      trainersData = Array.isArray(apiData.data) ? apiData.data : [];
-      pagination = apiData.pagination || {};
-      console.log('🔍 Entrenadores extraídos del formato status success:', trainersData.length);
-    } else {
-      // Fallback: intentar extraer directamente
-      trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
-      pagination = response.data?.pagination || {};
-      console.log('🔍 Entrenadores extraídos del fallback:', trainersData.length);
-    }
-
-    console.log('🔍 Array de entrenadores a mapear:', trainersData);
-
-    const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
-
-    const totalCount = pagination.total ?? mappedTrainers.length;
-    const currentLimit = queryParams.limite;
-
-    return {
-      data: mappedTrainers,
-      total: totalCount,
-      page: pagination.page ?? queryParams.pagina,
-      limit: pagination.limit ?? currentLimit,
-      totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
-    };
-
-  } catch (error) {
-    console.error('💥 Error obteniendo entrenadores:', error);
-
-    return {
-      data: [],
-      total: 0,
-      page: params?.page ?? 1,
-      limit: params?.limit ?? 10,
-      totalPages: 0,
-    };
-=======
-      if (response.data.status === 'success') {
-        const data = response.data.data;
-        trainersData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-        pagination = data?.pagination || {};
+      // Extraer datos según la estructura de respuesta real
+      if (response.data.success && response.data.data) {
+        // Estructura: { success: true, data: { data: [...], pagination: {...} } }
+        const apiData = response.data.data;
+        trainersData = Array.isArray(apiData.data) ? apiData.data : [];
+        pagination = apiData.pagination || {};
+        console.log('🔍 Entrenadores extraídos del formato success:', trainersData.length);
+      } else if (response.data.status === 'success' && response.data.data) {
+        // Estructura: { status: 'success', data: { data: [...], pagination: {...} } }
+        const apiData = response.data.data;
+        trainersData = Array.isArray(apiData.data) ? apiData.data : [];
+        pagination = apiData.pagination || {};
+        console.log('🔍 Entrenadores extraídos del formato status success:', trainersData.length);
       } else {
+        // Fallback: intentar extraer directamente
         trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
         pagination = response.data?.pagination || {};
+        console.log('🔍 Entrenadores extraídos del fallback:', trainersData.length);
       }
+
+      console.log('🔍 Array de entrenadores a mapear:', trainersData);
 
       const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
 
@@ -448,7 +414,6 @@ class ApiService {
         totalPages: 0,
       };
     }
->>>>>>> 0101c4666deec9fdddca62ce16b261727bac6ae4
   }
 
   // CLIENTES
