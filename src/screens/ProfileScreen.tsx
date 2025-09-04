@@ -239,7 +239,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                   <View style={styles.fieldContainer}>
                     <Text style={styles.label}>Tipo de Documento</Text>
                     <View style={[styles.fieldValue, styles.fieldWithIcon]}>
-                      <IconField iconName="badge" />
                       <Text style={styles.valueText}>{getDocumentTypeName(user.tipo_documento)}</Text>
                     </View>
                   </View>
@@ -471,34 +470,34 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   cardContent: {
-    padding: 24,
+    padding: 18,
   },
   sectionContainer: {
-    marginBottom: 32,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: "#111827",
-    marginBottom: 16,
-    paddingBottom: 8,
+    marginBottom: 10,
+    paddingBottom: 4,
     borderBottomWidth: 2,
     borderBottomColor: Colors.primary,
   },
   row: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 20,
+    gap: 14,
+    marginBottom: 14,
   },
   fieldContainer: {
     flex: 1,
-    marginBottom: 20,
+    marginBottom: 14,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
     color: "#374151",
-    marginBottom: 8,
+    marginBottom: 5,
   },
   required: {
     color: "#EF4444",
@@ -510,13 +509,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   fieldValue: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 8,
-    minHeight: 48,
+    minHeight: 40,
     justifyContent: 'center',
   },
   fieldWithIcon: {
