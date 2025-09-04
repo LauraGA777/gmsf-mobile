@@ -13,7 +13,15 @@ import { PieChart, MetricCard, BarChart, LineChart, StatBox, ErrorState, Summary
 import { Colors } from '../constants/colors';
 import { apiService } from '../services/api';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Márgenes estándar responsivos
+const MARGINS = {
+  horizontal: Math.max(16, screenWidth * 0.04), // Mínimo 16px, máximo 4% del ancho
+  vertical: Math.max(8, screenHeight * 0.01), // Mínimo 8px, máximo 1% del alto
+  card: Math.max(12, screenWidth * 0.03), // Mínimo 12px, máximo 3% del ancho
+  section: Math.max(20, screenWidth * 0.05), // Mínimo 20px, máximo 5% del ancho
+};
 
 interface DashboardData {
   trainers: {
@@ -50,52 +58,33 @@ export const DashboardScreen: React.FC = () => {
   const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
-      
-      console.log('🔄 Cargando datos del dashboard móvil...');
-      
+      setError(null);
+
+      console.log('🔄 Cargando datos del dashboard...');
+
       // Obtener datos de entrenadores y clientes en paralelo
-      const [trainersResponse, clientsResponse] = await Promise.all([
-        apiService.getTrainers({ page: 1, limit: 50 }), // Máximo 50 según validación API
-        apiService.getClients({ page: 1, limit: 50 })   // Máximo 50 según validación API  
-      ]).catch(async (error) => {
-        // Si falla getTrainers, intentar solo clientes
-        console.warn('Error obteniendo entrenadores, continuando solo con clientes:', error);
-        const clientsOnly = await apiService.getClients({ page: 1, limit: 50 });
-        return [{ data: [] }, clientsOnly]; // Array vacío para trainers
-      });
+      const [trainersData, clientsData] = await Promise.all([
+        apiService.getTrainers({ page: 1, limit: 50 }),
+        apiService.getClients({ page: 1, limit: 50 })
+      ]);
 
-      // Procesar datos de entrenadores
-      const trainers = trainersResponse.data || [];
-      let trainersData = { active: 0, inactive: 0, total: 0 };
-      
-      console.log('🔍 Datos de entrenadores recibidos:', trainers);
-      
-      if (Array.isArray(trainers) && trainers.length > 0) {
-        trainersData = {
-          active: trainers.filter((t: any) => t.activo === true || t.estado === true).length,
-          inactive: trainers.filter((t: any) => t.activo === false || t.estado === false).length,
-          total: trainers.length
-        };
-      }
+      console.log('✅ Datos obtenidos - Entrenadores:', trainersData, 'Clientes:', clientsData);
 
-      // Procesar datos de clientes
-      const clients = clientsResponse.data || [];
-      let clientsData = { active: 0, inactive: 0, total: 0 };
-      
-      if (Array.isArray(clients) && clients.length > 0) {
-        clientsData = {
-          active: clients.filter((c: any) => c.activo === true || c.estado === true).length,
-          inactive: clients.filter((c: any) => c.activo === false || c.estado === false).length,
-          total: clients.length
-        };
-      }
-
+      // Procesar datos del dashboard
       const dashboardData: DashboardData = {
-        trainers: trainersData,
-        clients: clientsData,
+        trainers: {
+          active: trainersData.data.filter(t => t.activo).length,
+          inactive: trainersData.data.filter(t => !t.activo).length,
+          total: trainersData.total
+        },
+        clients: {
+          active: clientsData.data.filter(c => c.activo).length,
+          inactive: clientsData.data.filter(c => !c.activo).length,
+          total: clientsData.total
+        },
         summary: {
-          totalAttendances: 2, // Simulado - puedes conectar con API real
-          activeContracts: 5,
+          totalAttendances: 4,
+          activeContracts: 2,
           monthlyRevenue: 450000,
           activeMemberships: 3,
           newClients: clientsData.total
@@ -150,52 +139,37 @@ export const DashboardScreen: React.FC = () => {
     loadDashboardData(true);
   }, [loadDashboardData]);
 
-  // Preparar datos para gráficas de pie
+  // Función para obtener datos de gráfica de entrenadores
   const getTrainersChartData = () => {
     if (!data) return [];
-    
     return [
-      {
-        label: 'Activos',
-        value: data.trainers.active,
-        color: Colors.success
-      },
-      {
-        label: 'Inactivos',
-        value: data.trainers.inactive,
-        color: Colors.error
-      }
+      { value: data.trainers.active, color: Colors.success, label: 'Activos' },
+      { value: data.trainers.total - data.trainers.active, color: Colors.textLight, label: 'Inactivos' },
     ];
   };
 
+  // Función para obtener datos de gráfica de clientes
   const getClientsChartData = () => {
     if (!data) return [];
-    
     return [
-      {
-        label: 'Activos',
-        value: data.clients.active,
-        color: Colors.primary
-      },
-      {
-        label: 'Inactivos',
-        value: data.clients.inactive,
-        color: Colors.warning
-      }
+      { value: data.clients.active, color: Colors.info, label: 'Activos' },
+      { value: data.clients.total - data.clients.active, color: Colors.textLight, label: 'Inactivos' },
     ];
   };
 
-  // Pantalla de carga con animación
+  // Pantalla de carga
   if (loading && !data) {
     return (
-      <View style={styles.loadingContainer}>
-        <LottieView
-          source={require('../../assets/lottie/loading.json')}
-          autoPlay
-          loop
-          style={styles.loadingAnimation}
-        />
-        <Text style={styles.loadingText}>Cargando datos...</Text>
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LottieView
+            source={require('../../assets/lottie/loading.json')}
+            autoPlay
+            loop
+            style={styles.loadingAnimation}
+          />
+          <Text style={styles.loadingText}>Cargando datos del dashboard...</Text>
+        </View>
       </View>
     );
   }
@@ -215,6 +189,7 @@ export const DashboardScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -226,241 +201,229 @@ export const DashboardScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header mejorado */}
-        <View style={styles.headerImproved}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerMain}>
-              <Text style={styles.titleImproved}>Panel de Control</Text>
-              <Text style={styles.subtitleImproved}>Gestión completa del gimnasio</Text>
-            </View>
-            <View style={styles.headerStats}>
-              <View style={styles.headerStatItem}>
-                <MaterialIcons name="trending-up" size={16} color={Colors.success} />
-                <Text style={styles.headerStatText}>Activo</Text>
-              </View>
-            </View>
+        <View style={styles.content}>
+          {/* Título Principal */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.mainTitle}>Panel de Rendimiento</Text>
           </View>
-          {data?.lastUpdate && (
-            <View style={styles.lastUpdateContainer}>
-              <MaterialIcons name="schedule" size={14} color={Colors.textLight} />
-              <Text style={styles.lastUpdateImproved}>
-                Última actualización: {data.lastUpdate}
-              </Text>
-            </View>
-          )}
-        </View>
 
-        {/* Resumen General - Estilo Moderno */}
-        <View style={styles.summarySection}>
-          <View style={styles.sectionHeaderImproved}>
-            <View style={styles.headerIconContainer}>
-              <MaterialIcons name="dashboard" size={22} color={Colors.primary} />
-            </View>
-            <Text style={styles.sectionTitle}>Resumen General</Text>
-            <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>Tiempo real</Text>
-            </View>
-          </View>
-          
-          <View style={styles.modernSummaryContainer}>
-            {/* Primera fila: 2 tarjetas */}
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryCardHalf}>
-                <SummaryCard
-                  title="Asistencias"
-                  value={data?.summary.totalAttendances || 0}
-                  subtitle="Total de asistencias registradas"
-                  icon="pulse"
-                  color={Colors.primary}
-                  trend={{
-                    value: (data?.summary.totalAttendances || 0) >= 2 ? 80.0 : 20.0,
-                    isPositive: (data?.summary.totalAttendances || 0) >= 2
-                  }}
-                />
-              </View>
-              <View style={styles.summaryCardHalf}>
-                <SummaryCard
-                  title="Contratos Activos"
-                  value={data?.summary.activeContracts || 0}
-                  subtitle="Contratos vigentes"
-                  icon="document-text"
-                  color={Colors.success}
-                  trend={data?.summary.activeContracts ? {
-                    value: 0.0,
-                    isPositive: false
-                  } : undefined}
-                />
-              </View>
-            </View>
-
-            {/* Segunda fila: 2 tarjetas */}
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryCardHalf}>
-                <SummaryCard
-                  title="Ingresos"
-                  value={data?.summary.monthlyRevenue || 0}
-                  subtitle="Ingresos del periodo"
-                  icon="cash"
-                  color={Colors.warning}
-                  trend={data?.summary.monthlyRevenue ? {
-                    value: 0.0,
-                    isPositive: false
-                  } : undefined}
-                />
-              </View>
-              <View style={styles.summaryCardHalf}>
-                <SummaryCard
-                  title="Membresías Activas"
-                  value={data?.summary.activeMemberships || 0}
-                  subtitle="Membresías vigentes"
-                  icon="card"
-                  color={Colors.error}
-                  trend={data?.summary.activeMemberships ? {
-                    value: 0.0,
-                    isPositive: false
-                  } : undefined}
-                />
-              </View>
-            </View>
-
-            {/* Tercera fila: 1 tarjeta centrada pero con mismo ancho */}
-            <View style={styles.summaryRowSingle}>
-              <View style={styles.summaryCardCentered}>
-                <SummaryCard
-                  title="Nuevos Clientes"
-                  value={data?.summary.newClients || 0}
-                  subtitle="Clientes registrados este mes"
-                  icon="people"
-                  color={Colors.info}
-                  trend={{
-                    value: (data?.summary.newClients || 0) >= 2 ? 60.0 : 0.0,
-                    isPositive: (data?.summary.newClients || 0) >= 2
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Gráficas de Tendencias - Mejorado */}
-        <View style={styles.chartsSection}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.headerIconContainer}>
-              <MaterialIcons name="trending-up" size={22} color={Colors.chartBlue} />
-            </View>
-            <Text style={styles.sectionTitle}>Tendencias de Rendimiento</Text>
-            <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>Últimos 7 días</Text>
-            </View>
-          </View>
-          
-          {/* Gráfica de Asistencias - Mejorada */}
-          <View style={styles.chartCardImproved}>
-            <View style={styles.chartHeaderImproved}>
-              <View style={styles.chartTitleContainer}>
-                <Text style={styles.chartTitleMain}>Asistencias Diarias</Text>
-                <Text style={styles.chartSubtitle}>Monitoreo de actividad del gimnasio</Text>
-              </View>
-              <View style={styles.chartMetric}>
-                <Text style={styles.chartMetricValue}>{data?.summary.totalAttendances || 0}</Text>
-                <Text style={styles.chartMetricLabel}>Total</Text>
-              </View>
-            </View>
-            <LineChart
-              data={data?.trends.attendanceData || []}
-              title=""
-              color={Colors.chartBlue}
-              height={200}
-            />
-          </View>
-        </View>
-
-        {/* Gráficas de Estado - Rediseñadas simétricamente */}
-        <View style={styles.chartsSection}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.headerIconContainer}>
-              <MaterialIcons name="donut-large" size={22} color={Colors.success} />
-            </View>
-            <Text style={styles.sectionTitle}>Distribución de Personal y Clientes</Text>
-          </View>
-          
-          <View style={styles.chartsContainerImproved}>
-            {/* Gráfica de Entrenadores - Mejorada */}
-            <View style={styles.chartCardSymmetric}>
-              <View style={styles.chartHeaderSymmetric}>
-                <View style={styles.chartIconContainer}>
-                  <MaterialIcons name="fitness-center" size={20} color={Colors.success} />
+          {/* Resumen General Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderContent}>
+                <MaterialIcons name="assessment" size={24} color={Colors.primary} />
+                <View style={styles.cardHeaderText}>
+                  <Text style={styles.cardTitle}>Resumen General</Text>
+                  <Text style={styles.cardDescription}>Métricas principales del gimnasio</Text>
                 </View>
-                <Text style={styles.chartTitleSymmetric}>Entrenadores</Text>
-                <Text style={styles.chartSubtitleSymmetric}>Estado del personal</Text>
               </View>
-              
-              {data && data.trainers.total > 0 ? (
-                <View style={styles.chartContentContainer}>
-                  <PieChart
-                    data={getTrainersChartData()}
-                    size={140}
-                    strokeWidth={14}
-                    centerText={data.trainers.total.toString()}
-                    centerSubtext="Total"
-                    showLabels={false}
+              <View style={styles.cardBadge}>
+                <Text style={styles.cardBadgeText}>Tiempo real</Text>
+              </View>
+            </View>
+            
+            <View style={styles.cardContent}>
+              {/* Primera fila: 2 tarjetas */}
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryCardHalf}>
+                  <SummaryCard
+                    title="Asistencias"
+                    value={data?.summary.totalAttendances || 0}
+                    subtitle="Total de asistencias registradas"
+                    icon="pulse"
+                    color={Colors.primary}
+                    trend={{
+                      value: (data?.summary.totalAttendances || 0) >= 2 ? 80.0 : 20.0,
+                      isPositive: (data?.summary.totalAttendances || 0) >= 2
+                    }}
                   />
-                  <View style={styles.chartLegend}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: Colors.success }]} />
-                      <Text style={styles.legendText}>Activos: {data.trainers.active}</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
-                      <Text style={styles.legendText}>Inactivos: {data.trainers.total - data.trainers.active}</Text>
-                    </View>
+                </View>
+                <View style={styles.summaryCardHalf}>
+                  <SummaryCard
+                    title="Contratos Activos"
+                    value={data?.summary.activeContracts || 0}
+                    subtitle="Contratos vigentes"
+                    icon="document-text"
+                    color={Colors.success}
+                    trend={data?.summary.activeContracts ? {
+                      value: 0.0,
+                      isPositive: false
+                    } : undefined}
+                  />
+                </View>
+              </View>
+
+              {/* Segunda fila: 2 tarjetas */}
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryCardHalf}>
+                  <SummaryCard
+                    title="Ingresos"
+                    value={data?.summary.monthlyRevenue || 0}
+                    subtitle="Ingresos del periodo"
+                    icon="cash"
+                    color={Colors.warning}
+                    trend={data?.summary.monthlyRevenue ? {
+                      value: 0.0,
+                      isPositive: false
+                    } : undefined}
+                  />
+                </View>
+                <View style={styles.summaryCardHalf}>
+                  <SummaryCard
+                    title="Membresías Activas"
+                    value={data?.summary.activeMemberships || 0}
+                    subtitle="Membresías vigentes"
+                    icon="card"
+                    color={Colors.error}
+                    trend={data?.summary.activeMemberships ? {
+                      value: 0.0,
+                      isPositive: false
+                    } : undefined}
+                  />
+                </View>
+              </View>
+
+              {/* Tercera fila: 1 tarjeta centrada */}
+              <View style={styles.summaryRowSingle}>
+                <View style={styles.summaryCardCentered}>
+                  <SummaryCard
+                    title="Nuevos Clientes"
+                    value={data?.summary.newClients || 0}
+                    subtitle="Clientes registrados este mes"
+                    icon="people"
+                    color={Colors.info}
+                    trend={{
+                      value: (data?.summary.newClients || 0) >= 2 ? 60.0 : 0.0,
+                      isPositive: (data?.summary.newClients || 0) >= 2
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Gráficas de Tendencias Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderContent}>
+                <MaterialIcons name="trending-up" size={24} color={Colors.primary} />
+                <View style={styles.cardHeaderText}>
+                  <Text style={styles.cardTitle}>Tendencias de Rendimiento</Text>
+                  <Text style={styles.cardDescription}>Monitoreo de actividad del gimnasio</Text>
+                </View>
+              </View>
+              <View style={styles.cardBadge}>
+                <Text style={styles.cardBadgeText}>Últimos 7 días</Text>
+              </View>
+            </View>
+            
+            <View style={styles.cardContent}>
+              <View style={styles.chartContainer}>
+                <View style={styles.chartHeader}>
+                  <Text style={styles.chartTitle}>Asistencias Diarias</Text>
+                  <View style={styles.chartMetric}>
+                    <Text style={styles.chartMetricValue}>{data?.summary.totalAttendances || 0}</Text>
+                    <Text style={styles.chartMetricLabel}>Total</Text>
                   </View>
                 </View>
-              ) : (
-                <View style={styles.noDataContainerImproved}>
-                  <MaterialIcons name="info-outline" size={40} color={Colors.textLight} />
-                  <Text style={styles.noDataTextImproved}>Sin datos disponibles</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Gráfica de Clientes - Mejorada y simétrica */}
-            <View style={styles.chartCardSymmetric}>
-              <View style={styles.chartHeaderSymmetric}>
-                <View style={styles.chartIconContainer}>
-                  <MaterialIcons name="people" size={20} color={Colors.primary} />
-                </View>
-                <Text style={styles.chartTitleSymmetric}>Clientes</Text>
-                <Text style={styles.chartSubtitleSymmetric}>Estado de membresías</Text>
+                <LineChart
+                  data={data?.trends.attendanceData || []}
+                  title=""
+                  color={Colors.chartBlue}
+                  height={200}
+                />
               </View>
-              
-              {data && data.clients.total > 0 ? (
-                <View style={styles.chartContentContainer}>
-                  <PieChart
-                    data={getClientsChartData()}
-                    size={140}
-                    strokeWidth={14}
-                    centerText={data.clients.total.toString()}
-                    centerSubtext="Total"
-                    showLabels={false}
-                  />
-                  <View style={styles.chartLegend}>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
-                      <Text style={styles.legendText}>Activos: {data.clients.active}</Text>
-                    </View>
-                    <View style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
-                      <Text style={styles.legendText}>Inactivos: {data.clients.total - data.clients.active}</Text>
-                    </View>
+            </View>
+          </View>
+
+          {/* Gráficas de Estado Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderContent}>
+                <MaterialIcons name="donut-large" size={24} color={Colors.success} />
+                <View style={styles.cardHeaderText}>
+                  <Text style={styles.cardTitle}>Distribución de Personal y Clientes</Text>
+                  <Text style={styles.cardDescription}>Estado actual del gimnasio</Text>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.cardContent}>
+              <View style={styles.chartsRow}>
+                {/* Gráfica de Entrenadores */}
+                <View style={styles.chartCardHalf}>
+                  <View style={styles.chartHeaderCenter}>
+                    <MaterialIcons name="fitness-center" size={20} color={Colors.success} />
+                    <Text style={styles.chartTitleCenter}>Entrenadores</Text>
+                    <Text style={styles.chartSubtitleCenter}>Estado del personal</Text>
                   </View>
+                  
+                  {data && data.trainers.total > 0 ? (
+                    <View style={styles.chartContentCenter}>
+                      <PieChart
+                        data={getTrainersChartData()}
+                        size={120}
+                        strokeWidth={12}
+                        centerText={data.trainers.total.toString()}
+                        centerSubtext="Total"
+                        showLabels={false}
+                      />
+                      <View style={styles.chartLegend}>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: Colors.success }]} />
+                          <Text style={styles.legendText}>Activos: {data.trainers.active}</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
+                          <Text style={styles.legendText}>Inactivos: {data.trainers.total - data.trainers.active}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.noDataContainer}>
+                      <MaterialIcons name="info-outline" size={32} color={Colors.textLight} />
+                      <Text style={styles.noDataText}>Sin datos</Text>
+                    </View>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.noDataContainerImproved}>
-                  <MaterialIcons name="info-outline" size={40} color={Colors.textLight} />
-                  <Text style={styles.noDataTextImproved}>Sin datos disponibles</Text>
+
+                {/* Gráfica de Clientes */}
+                <View style={styles.chartCardHalf}>
+                  <View style={styles.chartHeaderCenter}>
+                    <MaterialIcons name="people" size={20} color={Colors.info} />
+                    <Text style={styles.chartTitleCenter}>Clientes</Text>
+                    <Text style={styles.chartSubtitleCenter}>Estado de membresías</Text>
+                  </View>
+                  
+                  {data && data.clients.total > 0 ? (
+                    <View style={styles.chartContentCenter}>
+                      <PieChart
+                        data={getClientsChartData()}
+                        size={120}
+                        strokeWidth={12}
+                        centerText={data.clients.total.toString()}
+                        centerSubtext="Total"
+                        showLabels={false}
+                      />
+                      <View style={styles.chartLegend}>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: Colors.info }]} />
+                          <Text style={styles.legendText}>Activos: {data.clients.active}</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                          <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
+                          <Text style={styles.legendText}>Inactivos: {data.clients.total - data.clients.active}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.noDataContainer}>
+                      <MaterialIcons name="info-outline" size={32} color={Colors.textLight} />
+                      <Text style={styles.noDataText}>Sin datos</Text>
+                    </View>
+                  )}
                 </View>
-              )}
+              </View>
             </View>
           </View>
         </View>
@@ -470,246 +433,61 @@ export const DashboardScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // Estilos base siguiendo el patrón del ProfileScreen
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#F9FAFB",
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: MARGINS.section,
+  },
+  content: {
+    paddingHorizontal: MARGINS.horizontal,
+    paddingVertical: MARGINS.section,
+  },
+
+  // Estilos de loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: "#F9FAFB",
+    paddingHorizontal: MARGINS.horizontal,
   },
   loadingAnimation: {
     width: 120,
     height: 120,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: MARGINS.vertical * 2,
     fontSize: 16,
     color: Colors.textLight,
     fontWeight: '500',
-  },
-  scrollContent: {
-    paddingBottom: 32,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    padding: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.textLight,
-    marginBottom: 8,
-  },
-  lastUpdate: {
-    fontSize: 12,
-    color: Colors.textLight,
-    fontStyle: 'italic',
-  },
-  
-  // Nuevos estilos para el resumen y secciones
-  summarySection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  chartsSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  metricsSection: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginLeft: 8,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 4,
-  },
-  
-  // Nuevos estilos para la distribución en cuadrícula
-  summaryContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  summaryRowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingHorizontal: 2,
-  },
-  summaryRowBottom: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    paddingHorizontal: 20,
-  },
-  
-  metricsContainer: {
-    paddingHorizontal: 12,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  chartsContainer: {
-    paddingHorizontal: 16,
-    marginTop: 10,
-  },
-  chartCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginLeft: 8,
-  },
-  noDataContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noDataText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: Colors.textLight,
     textAlign: 'center',
   },
-  summaryCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 16,
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+
+  // Título Principal
+  titleContainer: {
+    paddingHorizontal: MARGINS.card,
+    paddingVertical: MARGINS.vertical * 2,
+    marginBottom: MARGINS.vertical * 2,
   },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 16,
+  mainTitle: {
+    fontSize: Math.min(32, screenWidth * 0.08),
+    fontWeight: "800",
+    color: "#111827",
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
-  summaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  summaryItem: {
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  
-  // Nuevos estilos para el diseño moderno
-  modernSummaryContainer: {
-    paddingHorizontal: 4,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    gap: 8,
-  },
-  summaryCardHalf: {
-    flex: 1,
-  },
-  summaryCardThird: {
-    flex: 1,
-    marginHorizontal: 2,
-  },
-  summaryRowSingle: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  summaryCardSingle: {
-    width: '70%', // 70% del ancho para centrar y dar espacio
-  },
-  summaryCardCentered: {
-    width: '48%', // Mismo ancho que las tarjetas de arriba para simetría
-  },
-  
-  // Estilos mejorados para headers
-  headerIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  headerBadge: {
-    backgroundColor: Colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+
+  // Card Container - Igual al ProfileScreen
+  card: {
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    marginLeft: 'auto',
-  },
-  headerBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  
-  // Estilos mejorados para gráficas
-  chartCardImproved: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -717,26 +495,86 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    marginBottom: MARGINS.vertical * 3,
   },
-  chartHeaderImproved: {
+  cardHeader: {
+    paddingHorizontal: MARGINS.section,
+    paddingTop: MARGINS.section,
+    paddingBottom: MARGINS.vertical * 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  cardHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: MARGINS.vertical,
+  },
+  cardHeaderText: {
+    marginLeft: MARGINS.vertical * 2,
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: MARGINS.vertical / 2,
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
+  },
+  cardBadge: {
+    backgroundColor: Colors.primary + '20',
+    paddingHorizontal: MARGINS.card,
+    paddingVertical: MARGINS.vertical / 2,
+    borderRadius: 12,
+  },
+  cardBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  cardContent: {
+    padding: MARGINS.card + 4,
+  },
+
+  // Estilos de summary - Responsivos
+  summaryRow: {
+    flexDirection: 'row',
+    marginBottom: MARGINS.card,
+    gap: MARGINS.card,
+  },
+  summaryCardHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  summaryRowSingle: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: MARGINS.vertical * 2,
+    paddingHorizontal: MARGINS.horizontal / 2,
+  },
+  summaryCardCentered: {
+    width: Math.min(screenWidth * 0.48, 200),
+  },
+
+  // Estilos de gráficas
+  chartContainer: {
+    marginBottom: MARGINS.vertical,
+  },
+  chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: MARGINS.vertical * 2,
+    paddingHorizontal: MARGINS.card / 2,
   },
-  chartTitleContainer: {
-    flex: 1,
-  },
-  chartTitleMain: {
+  chartTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
-    marginBottom: 4,
-  },
-  chartSubtitle: {
-    fontSize: 13,
-    color: Colors.textLight,
-    lineHeight: 18,
+    flex: 1,
   },
   chartMetric: {
     alignItems: 'flex-end',
@@ -752,159 +590,66 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  
-  // Contenedor mejorado para gráficas simétricas
-  chartsContainerImproved: {
+
+  // Gráficas en fila
+  chartsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: MARGINS.card,
   },
-  chartCardSymmetric: {
+  chartCardHalf: {
     flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    minWidth: 0,
   },
-  chartHeaderSymmetric: {
+  chartHeaderCenter: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: MARGINS.vertical * 2,
   },
-  chartIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  chartTitleSymmetric: {
+  chartTitleCenter: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
     textAlign: 'center',
-    marginBottom: 2,
+    marginTop: MARGINS.vertical,
+    marginBottom: MARGINS.vertical / 2,
   },
-  chartSubtitleSymmetric: {
+  chartSubtitleCenter: {
     fontSize: 12,
     color: Colors.textLight,
     textAlign: 'center',
   },
-  chartContentContainer: {
+  chartContentCenter: {
     alignItems: 'center',
   },
+  
+  // Legend y estados
   chartLegend: {
-    marginTop: 12,
+    marginTop: MARGINS.card,
     width: '100%',
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: MARGINS.vertical * 0.75,
   },
   legendDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
+    marginRight: MARGINS.vertical,
   },
   legendText: {
     fontSize: 12,
     color: Colors.text,
     flex: 1,
   },
-  noDataContainerImproved: {
+  noDataContainer: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: MARGINS.section,
   },
-  noDataTextImproved: {
+  noDataText: {
     fontSize: 12,
     color: Colors.textLight,
-    marginTop: 8,
+    marginTop: MARGINS.vertical,
     textAlign: 'center',
-  },
-  
-  // Estilos mejorados para el header principal
-  headerImproved: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: 'white',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 16,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  headerMain: {
-    flex: 1,
-  },
-  titleImproved: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  subtitleImproved: {
-    fontSize: 16,
-    color: Colors.textLight,
-    fontWeight: '500',
-  },
-  headerStats: {
-    alignItems: 'flex-end',
-  },
-  headerStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.success + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  headerStatText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.success,
-    marginLeft: 4,
-  },
-  lastUpdateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  lastUpdateImproved: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginLeft: 6,
-    fontStyle: 'italic',
-  },
-  
-  // Header de sección mejorado
-  sectionHeaderImproved: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 4,
   },
 });
