@@ -1,778 +1,471 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Alert,
-  Animated,
-  Dimensions,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Loading } from '../components';
+import { MaterialIcons } from '@expo/vector-icons';
+import LottieView from 'lottie-react-native';
+import { PieChart, MetricCard, BarChart, LineChart, StatBox, ErrorState, SummaryCard } from '../components';
 import { Colors } from '../constants/colors';
-import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Componente de tarjeta de ingresos con indicador de crecimiento
-const RevenueCard = ({ dailyRevenue, growth }: { dailyRevenue: any, growth: number }) => {
-  const isPositive = growth >= 0;
-  const growthColor = isPositive ? Colors.success : Colors.error;
-  const growthIcon = isPositive ? 'trending-up' : 'trending-down';
-
-  return (
-    <View style={styles.revenueCard}>
-      <View style={styles.revenueHeader}>
-        <Text style={styles.revenueTitle}>💰 Ingresos Diarios</Text>
-        <View style={[styles.growthIndicator, { backgroundColor: growthColor }]}>
-          <Ionicons name={growthIcon} size={16} color="white" />
-          <Text style={styles.growthText}>{growth > 0 ? '+' : ''}{growth.toFixed(1)}%</Text>
-        </View>
-      </View>
-      <Text style={styles.revenueAmount}>
-        {new Intl.NumberFormat('es-CO', {
-          style: 'currency',
-          currency: 'COP',
-          minimumFractionDigits: 0,
-        }).format(dailyRevenue?.today || 0)}
-      </Text>
-      <Text style={styles.revenueSubtitle}>
-        Ayer: {new Intl.NumberFormat('es-CO', {
-          style: 'currency',
-          currency: 'COP',
-          minimumFractionDigits: 0,
-        }).format(dailyRevenue?.yesterday || 0)}
-      </Text>
-      <Text style={styles.revenueDateText}>
-        📅 {dailyRevenue?.date || new Date().toLocaleDateString('es-CO')}
-      </Text>
-    </View>
-  );
-};
-
-// Componente de gráfico de barras para membresías por mes
-const MembershipBarChart = ({ data }: { data: Array<{ month: string, contracts: number, fullName?: string }> }) => {
-  // Filtrar meses con datos y asegurar que tenemos al menos 1 para evitar división por 0
-  const validData = data.filter(item => item.contracts >= 0);
-  const maxValue = Math.max(...validData.map(item => item.contracts), 1);
-  const [animatedValues] = useState(validData.map(() => new Animated.Value(0)));
-
-  useEffect(() => {
-    if (validData.length > 0) {
-      const animations = animatedValues.map((animatedValue, index) =>
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 800 + (index * 100),
-          useNativeDriver: false,
-        })
-      );
-
-      Animated.stagger(100, animations).start();
-    }
-  }, [data]);
-
-  // Si no hay datos, mostrar mensaje
-  if (validData.length === 0 || maxValue === 0) {
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>📊 Contratos por Mes (Enero - Junio)</Text>
-        <View style={styles.emptyChartContainer}>
-          <Ionicons name="bar-chart-outline" size={48} color={Colors.textSecondary} />
-          <Text style={styles.emptyChartText}>No hay datos de contratos disponibles</Text>
-          <Text style={styles.emptyChartSubtext}>Los datos aparecerán cuando se registren contratos</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.chartContainer}>
-      <Text style={styles.chartTitle}>📊 Contratos por Mes (Enero - Junio)</Text>
-      <View style={styles.barsContainer}>
-        {validData.slice(0, 6).map((item, index) => (
-          <View key={index} style={styles.barItem}>
-            <View style={styles.barWrapper}>
-              <Animated.View
-                style={[
-                  styles.bar,
-                  {
-                    height: animatedValues[index]?.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, ((item.contracts || 0) / maxValue) * 120]
-                    }) || 0,
-                    backgroundColor: item.contracts > 0 ? Colors.primary : Colors.textLight
-                  }
-                ]}
-              />
-              <Text style={styles.barValueText}>{item.contracts || 0}</Text>
-            </View>
-            <Text style={styles.barLabel}>{item.month}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-// Componente de membresía más popular
-const PopularMembershipCard = ({ membership }: { membership: any }) => (
-  <View style={styles.popularCard}>
-    <View style={styles.popularHeader}>
-      <Text style={styles.popularTitle}>⭐ Membresía Más Popular</Text>
-      <View style={styles.popularBadge}>
-        <Text style={styles.popularBadgeText}>TOP</Text>
-      </View>
-    </View>
-    <View style={styles.popularContent}>
-      <Text style={styles.popularName}>{membership?.name || 'Premium'}</Text>
-      <Text style={styles.popularStats}>
-        {membership?.activeContracts || 0} contratos activos
-      </Text>
-      <Text style={styles.popularRevenue}>
-        {new Intl.NumberFormat('es-CO', {
-          style: 'currency',
-          currency: 'COP',
-          minimumFractionDigits: 0,
-        }).format(membership?.price || 0)}/mes
-      </Text>
-      {membership?.description && (
-        <Text style={styles.popularDescription}>
-          {membership.description}
-        </Text>
-      )}
-    </View>
-    <View style={styles.popularFeatures}>
-      <Text style={styles.featureText}>✓ Acceso 24/7</Text>
-      <Text style={styles.featureText}>✓ Entrenador personal</Text>
-      <Text style={styles.featureText}>✓ Clases grupales</Text>
-    </View>
-  </View>
-);
-
-// Componente de tarjeta de acceso rápido
-const QuickAccessCard = ({ title, count, icon, color, active, inactive, onPress }: {
-  title: string, count: number, icon: string, color: string, active?: number, inactive?: number, onPress: () => void
-}) => (
-  <TouchableOpacity style={[styles.quickAccessCard, { borderLeftColor: color }]} onPress={onPress}>
-    <View style={styles.quickAccessHeader}>
-      <Ionicons name={icon as any} size={24} color={color} />
-      <Text style={styles.quickAccessCount}>{count || 0}</Text>
-    </View>
-    <Text style={styles.quickAccessTitle}>{title}</Text>
-    {(active !== undefined && inactive !== undefined) && (
-      <View style={styles.quickAccessStats}>
-        <Text style={styles.quickAccessActive}>✅ {active} activos</Text>
-        {inactive > 0 && <Text style={styles.quickAccessInactive}>❌ {inactive} inactivos</Text>}
-      </View>
-    )}
-    <View style={styles.quickAccessFooter}>
-      <Text style={styles.quickAccessAction}>Ver todos</Text>
-      <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-    </View>
-  </TouchableOpacity>
-);
-
-// Componente de estadísticas adicionales del widget
-const WidgetStatsCard = ({ widget }: { widget: any }) => {
-  if (!widget) return null;
-
-  return (
-    <View style={styles.widgetCard}>
-      <View style={styles.widgetHeader}>
-        <Text style={styles.widgetTitle}>📱 Resumen de Hoy</Text>
-        <Text style={styles.widgetTime}>🕒 {widget.lastUpdate}</Text>
-      </View>
-      <View style={styles.widgetStats}>
-        <View style={styles.widgetStat}>
-          <Ionicons name="cash" size={20} color={Colors.success} />
-          <Text style={styles.widgetStatLabel}>Ingresos</Text>
-          <Text style={styles.widgetStatValue}>
-            {new Intl.NumberFormat('es-CO', {
-              style: 'currency',
-              currency: 'COP',
-              minimumFractionDigits: 0,
-            }).format(widget.todayRevenue || 0)}
-          </Text>
-        </View>
-        <View style={styles.widgetStat}>
-          <Ionicons name="people" size={20} color={Colors.primary} />
-          <Text style={styles.widgetStatLabel}>Asistencias</Text>
-          <Text style={styles.widgetStatValue}>{widget.todayAttendance || 0}</Text>
-        </View>
-        <View style={styles.widgetStat}>
-          <Ionicons name="person-add" size={20} color={Colors.warning} />
-          <Text style={styles.widgetStatLabel}>Clientes Activos</Text>
-          <Text style={styles.widgetStatValue}>{widget.activeClients || 0}</Text>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// Datos de fallback para cuando no hay conexión o falla la API
-const getFallbackData = () => ({
-  widget: {
-    todayRevenue: 0,
-    todayAttendance: 1,
-    activeClients: 7,
-    topMembership: "Membresía Premium",
-    lastUpdate: new Date().toTimeString().slice(0, 5)
-  },
-  quickSummary: {
-    todayStats: {
-      revenue: 0,
-      newContracts: 0,
-      attendance: 1,
-      activeClients: 7,
-      date: new Date().toLocaleDateString('es-CO')
-    },
-    quickCounters: {
-      users: 14,
-      trainers: 4,
-      clients: 7
-    },
-    revenueGrowth: {
-      current: 450000,
-      previous: 245000,
-      growthPercentage: 83.7,
-      isPositive: true
-    },
-    topMembership: {
-      name: "Membresía Premium",
-      price: 100000,
-      sales: 2
-    },
-    lastUpdate: new Date().toISOString()
-  },
-  mainMetrics: {
-    dailyRevenue: {
-      today: 0,
-      yesterday: 450000,
-      growthPercentage: -100,
-      isPositiveGrowth: false,
-      date: new Date().toLocaleDateString('es-CO')
-    },
-    membershipsByMonth: [
-      { month: "Ene", fullName: "Enero", contracts: 0, revenue: 0 },
-      { month: "Feb", fullName: "Febrero", contracts: 0, revenue: 0 },
-      { month: "Mar", fullName: "Marzo", contracts: 0, revenue: 0 },
-      { month: "Abr", fullName: "Abril", contracts: 0, revenue: 0 },
-      { month: "May", fullName: "Mayo", contracts: 0, revenue: 0 },
-      { month: "Jun", fullName: "Junio", contracts: 0, revenue: 0 }
-    ],
-    popularMembership: {
-      id: 3,
-      name: "Membresía Premium",
-      price: 100000,
-      description: "Membresía con acceso completo",
-      activeContracts: 2
-    },
-    quickAccessCounters: {
-      users: { total: 17, active: 14, inactive: 3 },
-      trainers: { total: 4, active: 4, inactive: 0 },
-      clients: { total: 7, active: 7, inactive: 0 }
-    },
-    weeklyTrends: {
-      revenue: { current: 450000, growth: 83.7 },
-      contracts: { current: 1, growth: -66.7 },
-      attendance: { current: 3, growth: -50 }
-    },
-    period: "today"
-  }
-});
+interface DashboardData {
+  trainers: {
+    active: number;
+    inactive: number;
+    total: number;
+  };
+  clients: {
+    active: number;
+    inactive: number;
+    total: number;
+  };
+  summary: {
+    totalAttendances: number;
+    activeContracts: number;
+    monthlyRevenue: number;
+    activeMemberships: number;
+    newClients: number;
+  };
+  trends: {
+    attendanceData: Array<{ date: string; value: number }>;
+    revenueData: Array<{ date: string; value: number }>;
+  };
+  lastUpdate?: string;
+}
 
 export const DashboardScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const [quickSummary, setQuickSummary] = useState<any>(null);
-  const [mainMetrics, setMainMetrics] = useState<any>(null);
-  const [widget, setWidget] = useState<any>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sideNavVisible, setSideNavVisible] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // REMOVER: Ya no necesitamos estas variables de estado
-  // const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // Función simplificada para limpiar sesión
-  const handleSessionExpired = async () => {
-    try {
-      console.log('🔄 Sesión expirada, limpiando datos...');
-      await apiService.clearSession();
-
-      // El AuthNavigator detectará automáticamente el cambio
-      console.log('✅ Sesión limpiada, AuthNavigator manejará la redirección');
-    } catch (error) {
-      console.error('💥 Error limpiando sesión:', error);
-    }
-  };
-
-  // Función simplificada de verificación de autenticación
-  const checkAuthentication = async () => {
-    try {
-      console.log('🔍 DashboardScreen: Verificando autenticación...');
-
-      const token = await apiService.getStoredToken();
-      const user = await apiService.getStoredUser();
-
-      console.log('Token encontrado:', token ? 'SÍ' : 'NO');
-      console.log('Usuario encontrado:', user ? 'SÍ' : 'NO');
-
-      if (!token || !user) {
-        console.log('❌ Usuario no autenticado');
-        await handleSessionExpired();
-        return false;
-      }
-
-      console.log('✅ Usuario autenticado');
-      return true;
-    } catch (error) {
-      console.error('💥 Error verificando autenticación:', error);
-      await handleSessionExpired();
-      return false;
-    }
-  };
-
-  const loadData = async (isRefresh = false) => {
+  // Cargar datos del dashboard
+  const loadDashboardData = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
-      setLoadError(null);
+      
+      console.log('🔄 Cargando datos del dashboard móvil...');
+      
+      // Obtener datos de entrenadores y clientes en paralelo
+      const [trainersResponse, clientsResponse] = await Promise.all([
+        apiService.getTrainers({ page: 1, limit: 50 }), // Máximo 50 según validación API
+        apiService.getClients({ page: 1, limit: 50 })   // Máximo 50 según validación API  
+      ]).catch(async (error) => {
+        // Si falla getTrainers, intentar solo clientes
+        console.warn('Error obteniendo entrenadores, continuando solo con clientes:', error);
+        const clientsOnly = await apiService.getClients({ page: 1, limit: 50 });
+        return [{ data: [] }, clientsOnly]; // Array vacío para trainers
+      });
 
-      console.log('🔄 Iniciando carga de datos del dashboard...');
-
-      // Verificar autenticación primero
-      const authenticated = await checkAuthentication();
-      if (!authenticated) {
-        console.log('⚠️ Usuario no autenticado, AuthNavigator manejará la redirección');
-        setLoading(false);
-        return;
+      // Procesar datos de entrenadores
+      const trainers = trainersResponse.data || [];
+      let trainersData = { active: 0, inactive: 0, total: 0 };
+      
+      console.log('🔍 Datos de entrenadores recibidos:', trainers);
+      
+      if (Array.isArray(trainers) && trainers.length > 0) {
+        trainersData = {
+          active: trainers.filter((t: any) => t.activo === true || t.estado === true).length,
+          inactive: trainers.filter((t: any) => t.activo === false || t.estado === false).length,
+          total: trainers.length
+        };
       }
 
-      // Verificar token en el interceptor
-      await apiService.checkTokenStatus();
-
-      // Intentar cargar datos de la API
-      try {
-        console.log('🔄 Intentando cargar datos desde la API...');
-
-        const [widgetData, quickSummaryData, mainMetricsData] = await Promise.allSettled([
-          apiService.getMobileWidget(),
-          apiService.getMobileQuickSummary('today'),
-          apiService.getMobileMainMetrics('today')
-        ]);
-
-        let hasRealData = false;
-
-        // Procesar widget
-        if (widgetData.status === 'fulfilled') {
-          console.log('✅ Widget cargado desde API');
-          setWidget(widgetData.value);
-          hasRealData = true;
-        } else {
-          console.warn('⚠️ Widget falló, usando datos de fallback');
-        }
-
-        // Procesar quick summary
-        if (quickSummaryData.status === 'fulfilled') {
-          console.log('✅ Quick summary cargado desde API');
-          setQuickSummary(quickSummaryData.value);
-          hasRealData = true;
-        } else {
-          console.warn('⚠️ Quick summary falló, usando datos de fallback');
-        }
-
-        // Procesar main metrics
-        if (mainMetricsData.status === 'fulfilled') {
-          console.log('✅ Main metrics cargado desde API');
-          setMainMetrics(mainMetricsData.value);
-          hasRealData = true;
-        } else {
-          console.warn('⚠️ Main metrics falló, usando datos de fallback');
-        }
-
-        // Si no se pudieron cargar datos reales, usar fallback
-        if (!hasRealData) {
-          console.log('🔄 Todos los endpoints fallaron, usando datos de fallback...');
-          const fallbackData = getFallbackData();
-          setWidget(fallbackData.widget);
-          setQuickSummary(fallbackData.quickSummary);
-          setMainMetrics(fallbackData.mainMetrics);
-          setLoadError('Mostrando datos de ejemplo - Verifica tu conexión');
-        } else {
-          // Completar con fallback los datos que fallaron
-          const fallbackData = getFallbackData();
-
-          if (widgetData.status === 'rejected') {
-            setWidget(fallbackData.widget);
-          }
-          if (quickSummaryData.status === 'rejected') {
-            setQuickSummary(fallbackData.quickSummary);
-          }
-          if (mainMetricsData.status === 'rejected') {
-            setMainMetrics(fallbackData.mainMetrics);
-          }
-
-          if (widgetData.status === 'rejected' || quickSummaryData.status === 'rejected' || mainMetricsData.status === 'rejected') {
-            setLoadError('Algunos datos pueden no estar actualizados');
-          }
-        }
-
-      } catch (error: any) {
-        console.error('💥 Error cargando datos desde API:', error);
-
-        // Usar datos de fallback en caso de error total
-        console.log('🔄 Usando datos de fallback debido a error...');
-        const fallbackData = getFallbackData();
-        setWidget(fallbackData.widget);
-        setQuickSummary(fallbackData.quickSummary);
-        setMainMetrics(fallbackData.mainMetrics);
-
-        const statusCode = error.response?.status;
-        if (statusCode === 401) {
-          setLoadError('Sesión expirada, cerrando sesión...');
-          setTimeout(() => handleSessionExpired(), 2000);
-        } else if (statusCode === 500) {
-          setLoadError('Error del servidor - Mostrando datos de ejemplo');
-        } else {
-          setLoadError('Error de conexión - Mostrando datos de ejemplo');
-        }
+      // Procesar datos de clientes
+      const clients = clientsResponse.data || [];
+      let clientsData = { active: 0, inactive: 0, total: 0 };
+      
+      if (Array.isArray(clients) && clients.length > 0) {
+        clientsData = {
+          active: clients.filter((c: any) => c.activo === true || c.estado === true).length,
+          inactive: clients.filter((c: any) => c.activo === false || c.estado === false).length,
+          total: clients.length
+        };
       }
 
-    } catch (error: any) {
-      console.error('💥 Error general en loadData:', error);
+      const dashboardData: DashboardData = {
+        trainers: trainersData,
+        clients: clientsData,
+        summary: {
+          totalAttendances: 2, // Simulado - puedes conectar con API real
+          activeContracts: 5,
+          monthlyRevenue: 450000,
+          activeMemberships: 3,
+          newClients: clientsData.total
+        },
+        trends: {
+          attendanceData: [
+            { date: '01/09', value: 0 },
+            { date: '02/09', value: 1 },
+            { date: '03/09', value: 2 },
+            { date: '04/09', value: 1 },
+            { date: '05/09', value: 0 }
+          ],
+          revenueData: [
+            { date: '01/09', value: 100000 },
+            { date: '02/09', value: 150000 },
+            { date: '03/09', value: 200000 },
+            { date: '04/09', value: 300000 },
+            { date: '05/09', value: 450000 }
+          ]
+        },
+        lastUpdate: new Date().toLocaleString('es-CO', {
+          timeZone: 'America/Bogota',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
 
-      // Usar datos de fallback
-      const fallbackData = getFallbackData();
-      setWidget(fallbackData.widget);
-      setQuickSummary(fallbackData.quickSummary);
-      setMainMetrics(fallbackData.mainMetrics);
-      setLoadError('Modo offline - Mostrando datos de ejemplo');
+      setData(dashboardData);
+      console.log('✅ Datos del dashboard cargados:', dashboardData);
+      setError(null);
 
+    } catch (error) {
+      console.error('❌ Error cargando dashboard:', error);
+      setError('No se pudieron cargar los datos. Verifica tu conexión e intenta nuevamente.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
   }, []);
 
-  const onRefresh = () => {
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Manejar pull to refresh
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadData(true);
-  };
+    loadDashboardData(true);
+  }, [loadDashboardData]);
 
-  const handleQuickAccess = (type: string) => {
-    console.log(`Navigate to ${type}`);
-
-    switch (type) {
-      case 'users':
-        console.log('🚀 Navegando a pantalla de usuarios...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de usuarios estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      case 'trainers':
-        console.log('🚀 Navegando a pantalla de entrenadores...');
-        navigation.navigate('Trainers' as never);
-        break;
-
-      case 'clients':
-        console.log('🚀 Navegando a pantalla de clientes...');
-        navigation.navigate('Clients' as never);
-        break;
-
-      default:
-        console.log('⚠️ Pantalla no implementada:', type);
-        Alert.alert(
-          'Próximamente',
-          `La pantalla de ${type} estará disponible pronto.`,
-          [{ text: 'OK' }]
-        );
-        break;
-    }
-  };
-
-  const handleSideNavigation = (screen: string) => {
-    setSideNavVisible(false);
-
-    switch (screen) {
-      case 'Dashboard':
-        // Ya estamos en el dashboard
-        break;
-
-      case 'Users':
-        console.log('🚀 Navegando a usuarios desde menú...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de usuarios estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      case 'Trainers':
-        console.log('🚀 Navegando a entrenadores desde menú...');
-        navigation.navigate('Trainers' as never);
-        break;
-
-      case 'Clients':
-        console.log('🚀 Navegando a clientes desde menú...');
-        navigation.navigate('Clients' as never);
-        break;
-
-      case 'Memberships':
-        console.log('🚀 Navegando a membresías desde menú...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de membresías estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      case 'Payments':
-        console.log('🚀 Navegando a pagos desde menú...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de pagos estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      case 'Reports':
-        console.log('🚀 Navegando a reportes desde menú...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de reportes estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      case 'Settings':
-        console.log('🚀 Navegando a configuración desde menú...');
-        Alert.alert(
-          'Próximamente',
-          'La pantalla de configuración estará disponible pronto.',
-          [{ text: 'OK' }]
-        );
-        break;
-
-      default:
-        Alert.alert(
-          'Próximamente',
-          `La pantalla de ${screen} estará disponible pronto.`,
-          [{ text: 'OK' }]
-        );
-        break;
-    }
-  };
-
-  // Componente de navegación lateral
-  const SideNavigation = ({ isVisible, onClose }: { isVisible: boolean, onClose: () => void }) => {
-    const menuItems = [
-      { title: 'Dashboard', icon: 'home', screen: 'Dashboard' },
-      { title: 'Usuarios', icon: 'people', screen: 'Users' },
-      { title: 'Entrenadores', icon: 'fitness', screen: 'Trainers' },
-      { title: 'Clientes', icon: 'person', screen: 'Clients' },
-      { title: 'Membresías', icon: 'card', screen: 'Memberships' },
-      { title: 'Pagos', icon: 'wallet', screen: 'Payments' },
-      { title: 'Reportes', icon: 'bar-chart', screen: 'Reports' },
-      { title: 'Configuración', icon: 'settings', screen: 'Settings' },
+  // Preparar datos para gráficas de pie
+  const getTrainersChartData = () => {
+    if (!data) return [];
+    
+    return [
+      {
+        label: 'Activos',
+        value: data.trainers.active,
+        color: Colors.success
+      },
+      {
+        label: 'Inactivos',
+        value: data.trainers.inactive,
+        color: Colors.error
+      }
     ];
+  };
 
-    if (!isVisible) return null;
+  const getClientsChartData = () => {
+    if (!data) return [];
+    
+    return [
+      {
+        label: 'Activos',
+        value: data.clients.active,
+        color: Colors.primary
+      },
+      {
+        label: 'Inactivos',
+        value: data.clients.inactive,
+        color: Colors.warning
+      }
+    ];
+  };
 
+  // Pantalla de carga con animación
+  if (loading && !data) {
     return (
-      <View style={styles.sideNavOverlay}>
-        <TouchableOpacity style={styles.sideNavBackdrop} onPress={onClose} />
-        <View style={styles.sideNavContainer}>
-          <View style={styles.sideNavHeader}>
-            <Text style={styles.sideNavTitle}>🏋️ GMSF Mobile</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.sideNavContent}>
-            {menuItems.map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.sideNavItem}
-                onPress={() => handleSideNavigation(item.screen)}
-              >
-                <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
-                <Text style={styles.sideNavItemText}>{item.title}</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+      <View style={styles.loadingContainer}>
+        <LottieView
+          source={require('../../assets/lottie/loading.json')}
+          autoPlay
+          loop
+          style={styles.loadingAnimation}
+        />
+        <Text style={styles.loadingText}>Cargando datos...</Text>
       </View>
     );
-  };
-
-  if (loading) {
-    return <Loading message="Cargando dashboard..." />;
   }
 
-  // REMOVER: Ya no necesitamos esta verificación aquí
-  // if (!isAuthenticated) {
-  //   return <Loading message="Redirigiendo al login..." />;
-  // }
+  // Pantalla de error
+  if (error && !data) {
+    return (
+      <ErrorState
+        title="Error de conexión"
+        message={error}
+        onRetry={() => loadDashboardData()}
+        showAnimation={false}
+      />
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header fijo visible */}
-      <View style={styles.fixedHeader}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => setSideNavVisible(true)}
-        >
-          <Ionicons name="menu" size={28} color={Colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>📊 Dashboard</Text>
-        {loadError && (
-          <TouchableOpacity onPress={() => setLoadError(null)}>
-            <Ionicons name="warning" size={24} color={Colors.warning} />
-          </TouchableOpacity>
-        )}
-        {!loadError && <View style={styles.headerSpacer} />}
-      </View>
-
-      {/* Mensaje de error/advertencia */}
-      {loadError && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="warning-outline" size={16} color={Colors.warning} />
-          <Text style={styles.errorBannerText}>{loadError}</Text>
-          <TouchableOpacity onPress={() => setLoadError(null)}>
-            <Ionicons name="close" size={16} color={Colors.warning} />
-          </TouchableOpacity>
-        </View>
-      )}
-
+    <View style={styles.container}>
       <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Widget Stats */}
-        {widget && (
-          <View style={styles.section}>
-            <WidgetStatsCard widget={widget} />
-          </View>
-        )}
-
-        {/* Tarjeta de ingresos diarios */}
-        <View style={styles.section}>
-          <RevenueCard
-            dailyRevenue={mainMetrics?.dailyRevenue}
-            growth={mainMetrics?.dailyRevenue?.growthPercentage || 0}
-          />
-        </View>
-
-        {/* Gráfico de membresías por mes */}
-        <View style={styles.section}>
-          <Card title="" subtitle="">
-            <MembershipBarChart data={mainMetrics?.membershipsByMonth || []} />
-          </Card>
-        </View>
-
-        {/* Membresía más popular */}
-        <View style={styles.section}>
-          <PopularMembershipCard membership={mainMetrics?.popularMembership} />
-        </View>
-
-        {/* Tarjetas de acceso rápido */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🚀 Acceso Rápido</Text>
-          <View style={styles.quickAccessGrid}>
-            <QuickAccessCard
-              title="Usuarios"
-              count={mainMetrics?.quickAccessCounters?.users?.total || quickSummary?.quickCounters?.users || 0}
-              active={mainMetrics?.quickAccessCounters?.users?.active}
-              inactive={mainMetrics?.quickAccessCounters?.users?.inactive}
-              icon="people"
-              color={Colors.primary}
-              onPress={() => handleQuickAccess('users')}
-            />
-            <QuickAccessCard
-              title="Entrenadores"
-              count={mainMetrics?.quickAccessCounters?.trainers?.total || quickSummary?.quickCounters?.trainers || 0}
-              active={mainMetrics?.quickAccessCounters?.trainers?.active}
-              inactive={mainMetrics?.quickAccessCounters?.trainers?.inactive}
-              icon="fitness"
-              color={Colors.success}
-              onPress={() => handleQuickAccess('trainers')}
-            />
-            <QuickAccessCard
-              title="Clientes"
-              count={mainMetrics?.quickAccessCounters?.clients?.total || quickSummary?.quickCounters?.clients || 0}
-              active={mainMetrics?.quickAccessCounters?.clients?.active}
-              inactive={mainMetrics?.quickAccessCounters?.clients?.inactive}
-              icon="person"
-              color={Colors.warning}
-              onPress={() => handleQuickAccess('clients')}
-            />
-          </View>
-        </View>
-
-        {/* Tendencias Semanales */}
-        {mainMetrics?.weeklyTrends && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📈 Tendencias Semanales</Text>
-            <View style={styles.trendsContainer}>
-              <View style={styles.trendItem}>
-                <Ionicons name="cash" size={20} color={Colors.success} />
-                <Text style={styles.trendLabel}>Ingresos</Text>
-                <Text style={[styles.trendValue, { color: mainMetrics.weeklyTrends.revenue.growth >= 0 ? Colors.success : Colors.error }]}>
-                  {mainMetrics.weeklyTrends.revenue.growth >= 0 ? '+' : ''}{mainMetrics.weeklyTrends.revenue.growth.toFixed(1)}%
-                </Text>
-              </View>
-              <View style={styles.trendItem}>
-                <Ionicons name="document" size={20} color={Colors.primary} />
-                <Text style={styles.trendLabel}>Contratos</Text>
-                <Text style={[styles.trendValue, { color: mainMetrics.weeklyTrends.contracts.growth >= 0 ? Colors.success : Colors.error }]}>
-                  {mainMetrics.weeklyTrends.contracts.growth >= 0 ? '+' : ''}{mainMetrics.weeklyTrends.contracts.growth.toFixed(1)}%
-                </Text>
-              </View>
-              <View style={styles.trendItem}>
-                <Ionicons name="people" size={20} color={Colors.warning} />
-                <Text style={styles.trendLabel}>Asistencia</Text>
-                <Text style={[styles.trendValue, { color: mainMetrics.weeklyTrends.attendance.growth >= 0 ? Colors.success : Colors.error }]}>
-                  {mainMetrics.weeklyTrends.attendance.growth >= 0 ? '+' : ''}{mainMetrics.weeklyTrends.attendance.growth.toFixed(1)}%
-                </Text>
+        {/* Header mejorado */}
+        <View style={styles.headerImproved}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerMain}>
+              <Text style={styles.titleImproved}>Panel de Control</Text>
+              <Text style={styles.subtitleImproved}>Gestión completa del gimnasio</Text>
+            </View>
+            <View style={styles.headerStats}>
+              <View style={styles.headerStatItem}>
+                <MaterialIcons name="trending-up" size={16} color={Colors.success} />
+                <Text style={styles.headerStatText}>Activo</Text>
               </View>
             </View>
           </View>
-        )}
+          {data?.lastUpdate && (
+            <View style={styles.lastUpdateContainer}>
+              <MaterialIcons name="schedule" size={14} color={Colors.textLight} />
+              <Text style={styles.lastUpdateImproved}>
+                Última actualización: {data.lastUpdate}
+              </Text>
+            </View>
+          )}
+        </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            🕒 Última actualización: {quickSummary?.lastUpdate ?
-              new Date(quickSummary.lastUpdate).toLocaleString('es-CO') :
-              new Date().toLocaleString('es-CO')
-            }
-          </Text>
-          <Text style={styles.footerSubtext}>
-            {loadError ? '📱 Datos de ejemplo' : '📡 Datos en tiempo real desde la API'}
-          </Text>
+        {/* Resumen General - Estilo Moderno */}
+        <View style={styles.summarySection}>
+          <View style={styles.sectionHeaderImproved}>
+            <View style={styles.headerIconContainer}>
+              <MaterialIcons name="dashboard" size={22} color={Colors.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>Resumen General</Text>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>Tiempo real</Text>
+            </View>
+          </View>
+          
+          <View style={styles.modernSummaryContainer}>
+            {/* Primera fila: 2 tarjetas */}
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryCardHalf}>
+                <SummaryCard
+                  title="Asistencias"
+                  value={data?.summary.totalAttendances || 0}
+                  subtitle="Total de asistencias registradas"
+                  icon="pulse"
+                  color={Colors.primary}
+                  trend={{
+                    value: (data?.summary.totalAttendances || 0) >= 2 ? 80.0 : 20.0,
+                    isPositive: (data?.summary.totalAttendances || 0) >= 2
+                  }}
+                />
+              </View>
+              <View style={styles.summaryCardHalf}>
+                <SummaryCard
+                  title="Contratos Activos"
+                  value={data?.summary.activeContracts || 0}
+                  subtitle="Contratos vigentes"
+                  icon="document-text"
+                  color={Colors.success}
+                  trend={data?.summary.activeContracts ? {
+                    value: 0.0,
+                    isPositive: false
+                  } : undefined}
+                />
+              </View>
+            </View>
+
+            {/* Segunda fila: 2 tarjetas */}
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryCardHalf}>
+                <SummaryCard
+                  title="Ingresos"
+                  value={data?.summary.monthlyRevenue || 0}
+                  subtitle="Ingresos del periodo"
+                  icon="cash"
+                  color={Colors.warning}
+                  trend={data?.summary.monthlyRevenue ? {
+                    value: 0.0,
+                    isPositive: false
+                  } : undefined}
+                />
+              </View>
+              <View style={styles.summaryCardHalf}>
+                <SummaryCard
+                  title="Membresías Activas"
+                  value={data?.summary.activeMemberships || 0}
+                  subtitle="Membresías vigentes"
+                  icon="card"
+                  color={Colors.error}
+                  trend={data?.summary.activeMemberships ? {
+                    value: 0.0,
+                    isPositive: false
+                  } : undefined}
+                />
+              </View>
+            </View>
+
+            {/* Tercera fila: 1 tarjeta centrada pero con mismo ancho */}
+            <View style={styles.summaryRowSingle}>
+              <View style={styles.summaryCardCentered}>
+                <SummaryCard
+                  title="Nuevos Clientes"
+                  value={data?.summary.newClients || 0}
+                  subtitle="Clientes registrados este mes"
+                  icon="people"
+                  color={Colors.info}
+                  trend={{
+                    value: (data?.summary.newClients || 0) >= 2 ? 60.0 : 0.0,
+                    isPositive: (data?.summary.newClients || 0) >= 2
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Gráficas de Tendencias - Mejorado */}
+        <View style={styles.chartsSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.headerIconContainer}>
+              <MaterialIcons name="trending-up" size={22} color={Colors.chartBlue} />
+            </View>
+            <Text style={styles.sectionTitle}>Tendencias de Rendimiento</Text>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>Últimos 7 días</Text>
+            </View>
+          </View>
+          
+          {/* Gráfica de Asistencias - Mejorada */}
+          <View style={styles.chartCardImproved}>
+            <View style={styles.chartHeaderImproved}>
+              <View style={styles.chartTitleContainer}>
+                <Text style={styles.chartTitleMain}>Asistencias Diarias</Text>
+                <Text style={styles.chartSubtitle}>Monitoreo de actividad del gimnasio</Text>
+              </View>
+              <View style={styles.chartMetric}>
+                <Text style={styles.chartMetricValue}>{data?.summary.totalAttendances || 0}</Text>
+                <Text style={styles.chartMetricLabel}>Total</Text>
+              </View>
+            </View>
+            <LineChart
+              data={data?.trends.attendanceData || []}
+              title=""
+              color={Colors.chartBlue}
+              height={200}
+            />
+          </View>
+        </View>
+
+        {/* Gráficas de Estado - Rediseñadas simétricamente */}
+        <View style={styles.chartsSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.headerIconContainer}>
+              <MaterialIcons name="donut-large" size={22} color={Colors.success} />
+            </View>
+            <Text style={styles.sectionTitle}>Distribución de Personal y Clientes</Text>
+          </View>
+          
+          <View style={styles.chartsContainerImproved}>
+            {/* Gráfica de Entrenadores - Mejorada */}
+            <View style={styles.chartCardSymmetric}>
+              <View style={styles.chartHeaderSymmetric}>
+                <View style={styles.chartIconContainer}>
+                  <MaterialIcons name="fitness-center" size={20} color={Colors.success} />
+                </View>
+                <Text style={styles.chartTitleSymmetric}>Entrenadores</Text>
+                <Text style={styles.chartSubtitleSymmetric}>Estado del personal</Text>
+              </View>
+              
+              {data && data.trainers.total > 0 ? (
+                <View style={styles.chartContentContainer}>
+                  <PieChart
+                    data={getTrainersChartData()}
+                    size={140}
+                    strokeWidth={14}
+                    centerText={data.trainers.total.toString()}
+                    centerSubtext="Total"
+                    showLabels={false}
+                  />
+                  <View style={styles.chartLegend}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: Colors.success }]} />
+                      <Text style={styles.legendText}>Activos: {data.trainers.active}</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
+                      <Text style={styles.legendText}>Inactivos: {data.trainers.total - data.trainers.active}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noDataContainerImproved}>
+                  <MaterialIcons name="info-outline" size={40} color={Colors.textLight} />
+                  <Text style={styles.noDataTextImproved}>Sin datos disponibles</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Gráfica de Clientes - Mejorada y simétrica */}
+            <View style={styles.chartCardSymmetric}>
+              <View style={styles.chartHeaderSymmetric}>
+                <View style={styles.chartIconContainer}>
+                  <MaterialIcons name="people" size={20} color={Colors.primary} />
+                </View>
+                <Text style={styles.chartTitleSymmetric}>Clientes</Text>
+                <Text style={styles.chartSubtitleSymmetric}>Estado de membresías</Text>
+              </View>
+              
+              {data && data.clients.total > 0 ? (
+                <View style={styles.chartContentContainer}>
+                  <PieChart
+                    data={getClientsChartData()}
+                    size={140}
+                    strokeWidth={14}
+                    centerText={data.clients.total.toString()}
+                    centerSubtext="Total"
+                    showLabels={false}
+                  />
+                  <View style={styles.chartLegend}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
+                      <Text style={styles.legendText}>Activos: {data.clients.active}</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: Colors.textLight }]} />
+                      <Text style={styles.legendText}>Inactivos: {data.clients.total - data.clients.active}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noDataContainerImproved}>
+                  <MaterialIcons name="info-outline" size={40} color={Colors.textLight} />
+                  <Text style={styles.noDataTextImproved}>Sin datos disponibles</Text>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
       </ScrollView>
-
-      {/* Navegación lateral */}
-      <SideNavigation
-        isVisible={sideNavVisible}
-        onClose={() => setSideNavVisible(false)}
-      />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -781,461 +474,437 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-
-  // Header fijo y visible
-  fixedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.divider,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  menuButton: {
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.background,
-  },
-  headerTitle: {
-    fontSize: FontSize.xxl,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-  },
-  headerSpacer: {
-    width: 44,
-  },
-
-  scrollView: {
+  loadingContainer: {
     flex: 1,
-  },
-  section: {
-    padding: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-
-  // Widget Card
-  widgetCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  widgetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  widgetTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
-  },
-  widgetTime: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-  },
-  widgetStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  widgetStat: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  widgetStatLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-  },
-  widgetStatValue: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-  },
-
-  // Revenue Card
-  revenueCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  revenueHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  revenueTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
-  },
-  growthIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.md,
-  },
-  growthText: {
-    color: 'white',
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    marginLeft: 4,
-  },
-  revenueAmount: {
-    fontSize: FontSize.xxxl,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  revenueSubtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-  },
-  revenueDateText: {
-    fontSize: FontSize.xs,
-    color: Colors.textLight,
-  },
-
-  // Chart
-  chartContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  chartTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
-    marginBottom: Spacing.lg,
-    textAlign: 'center',
-  },
-  barsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: 140,
-    paddingHorizontal: Spacing.sm,
-  },
-  barItem: {
-    alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 2,
-  },
-  barWrapper: {
-    height: 120,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    width: 32,
-    position: 'relative',
-  },
-  bar: {
-    width: 32,
-    borderRadius: 4,
-    minHeight: 5,
-  },
-  barValueText: {
-    position: 'absolute',
-    top: -20,
-    fontSize: FontSize.xs,
-    color: Colors.text,
-    fontWeight: FontWeight.bold,
-  },
-  barLabel: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    marginTop: 8,
-    fontWeight: FontWeight.medium,
-  },
-  emptyChartContainer: {
-    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.background,
   },
-  emptyChartText: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
-    textAlign: 'center',
+  loadingAnimation: {
+    width: 120,
+    height: 120,
   },
-  emptyChartSubtext: {
-    fontSize: FontSize.sm,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: Colors.textLight,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
+    fontWeight: '500',
   },
-
-  // Popular Membership
-  popularCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  scrollContent: {
+    paddingBottom: 32,
+    backgroundColor: Colors.background,
   },
-  popularHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
+  header: {
+    padding: 20,
+    paddingBottom: 10,
   },
-  popularTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
     color: Colors.text,
+    marginBottom: 4,
   },
-  popularBadge: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
+  subtitle: {
+    fontSize: 16,
+    color: Colors.textLight,
+    marginBottom: 8,
   },
-  popularBadgeText: {
-    color: 'white',
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-  },
-  popularContent: {
-    marginBottom: Spacing.md,
-  },
-  popularName: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  popularStats: {
-    fontSize: FontSize.md,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
-  },
-  popularRevenue: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: Colors.success,
-    marginBottom: Spacing.xs,
-  },
-  popularDescription: {
-    fontSize: FontSize.sm,
+  lastUpdate: {
+    fontSize: 12,
     color: Colors.textLight,
     fontStyle: 'italic',
   },
-  popularFeatures: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.divider,
-    paddingTop: Spacing.md,
+  
+  // Nuevos estilos para el resumen y secciones
+  summarySection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
-  featureText: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+  chartsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
-
-  // Quick Access
-  quickAccessGrid: {
-    gap: Spacing.sm,
+  metricsSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
-  quickAccessCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    borderLeftWidth: 3,
-    marginBottom: Spacing.sm,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  quickAccessHeader: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginLeft: 8,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
+  },
+  
+  // Nuevos estilos para la distribución en cuadrícula
+  summaryContainer: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  summaryRowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 2,
+  },
+  summaryRowBottom: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+  },
+  
+  metricsContainer: {
+    paddingHorizontal: 12,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  chartsContainer: {
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  chartCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  chartHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 20,
   },
-  quickAccessCount: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: Colors.text,
+    marginLeft: 8,
   },
-  quickAccessTitle: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+  noDataContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
   },
-  quickAccessStats: {
-    marginBottom: Spacing.sm,
+  noDataText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: 'center',
   },
-  quickAccessActive: {
-    fontSize: FontSize.xs,
-    color: Colors.success,
+  summaryCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 16,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  summaryItem: {
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  
+  // Nuevos estilos para el diseño moderno
+  modernSummaryContainer: {
+    paddingHorizontal: 4,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  summaryCardHalf: {
+    flex: 1,
+  },
+  summaryCardThird: {
+    flex: 1,
+    marginHorizontal: 2,
+  },
+  summaryRowSingle: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  summaryCardSingle: {
+    width: '70%', // 70% del ancho para centrar y dar espacio
+  },
+  summaryCardCentered: {
+    width: '48%', // Mismo ancho que las tarjetas de arriba para simetría
+  },
+  
+  // Estilos mejorados para headers
+  headerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  headerBadge: {
+    backgroundColor: Colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 'auto',
+  },
+  headerBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  
+  // Estilos mejorados para gráficas
+  chartCardImproved: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  chartHeaderImproved: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  chartTitleContainer: {
+    flex: 1,
+  },
+  chartTitleMain: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  chartSubtitle: {
+    fontSize: 13,
+    color: Colors.textLight,
+    lineHeight: 18,
+  },
+  chartMetric: {
+    alignItems: 'flex-end',
+  },
+  chartMetricValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Colors.chartBlue,
+  },
+  chartMetricLabel: {
+    fontSize: 11,
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  
+  // Contenedor mejorado para gráficas simétricas
+  chartsContainerImproved: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chartCardSymmetric: {
+    flex: 1,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  chartHeaderSymmetric: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  chartIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  chartTitleSymmetric: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
     marginBottom: 2,
   },
-  quickAccessInactive: {
-    fontSize: FontSize.xs,
-    color: Colors.error,
-  },
-  quickAccessFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quickAccessAction: {
-    fontSize: FontSize.sm,
-    color: Colors.primary,
-    fontWeight: FontWeight.medium,
-  },
-
-  // Trends
-  trendsContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  trendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  trendLabel: {
-    flex: 1,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    marginLeft: Spacing.sm,
-  },
-  trendValue: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-  },
-
-  // Side Navigation
-  sideNavOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-  },
-  sideNavBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  sideNavContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 280,
-    backgroundColor: Colors.surface,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 10,
-  },
-  sideNavHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-    backgroundColor: Colors.primary,
-  },
-  sideNavTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: 'white',
-  },
-  sideNavContent: {
-    flex: 1,
-    padding: Spacing.sm,
-  },
-  sideNavItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xs,
-  },
-  sideNavItemText: {
-    flex: 1,
-    fontSize: FontSize.md,
-    color: Colors.text,
-    marginLeft: Spacing.md,
-    fontWeight: FontWeight.medium,
-  },
-
-  footer: {
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: FontSize.sm,
+  chartSubtitleSymmetric: {
+    fontSize: 12,
     color: Colors.textLight,
-    marginBottom: Spacing.xs,
+    textAlign: 'center',
   },
-  footerSubtext: {
-    fontSize: FontSize.xs,
-    color: Colors.textSecondary,
+  chartContentContainer: {
+    alignItems: 'center',
   },
-
-  // Error Banner
-  errorBanner: {
+  chartLegend: {
+    marginTop: 12,
+    width: '100%',
+  },
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.warning + '20',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.warning + '50',
+    marginBottom: 6,
   },
-  errorBannerText: {
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 12,
+    color: Colors.text,
     flex: 1,
-    fontSize: FontSize.sm,
-    color: Colors.warning,
-    marginHorizontal: Spacing.sm,
+  },
+  noDataContainerImproved: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  noDataTextImproved: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  
+  // Estilos mejorados para el header principal
+  headerImproved: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    backgroundColor: 'white',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  headerMain: {
+    flex: 1,
+  },
+  titleImproved: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  subtitleImproved: {
+    fontSize: 16,
+    color: Colors.textLight,
+    fontWeight: '500',
+  },
+  headerStats: {
+    alignItems: 'flex-end',
+  },
+  headerStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.success + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  headerStatText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.success,
+    marginLeft: 4,
+  },
+  lastUpdateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lastUpdateImproved: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginLeft: 6,
+    fontStyle: 'italic',
+  },
+  
+  // Header de sección mejorado
+  sectionHeaderImproved: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
 });
-

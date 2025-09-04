@@ -334,14 +334,27 @@ class ApiService {
     let trainersData: any[] = [];
     let pagination: any = {};
 
-    if (response.data.status === 'success') {
-      const data = response.data.data;
-      trainersData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      pagination = data?.pagination || {};
+    // Extraer datos según la estructura de respuesta real
+    if (response.data.success && response.data.data) {
+      // Estructura: { success: true, data: { data: [...], pagination: {...} } }
+      const apiData = response.data.data;
+      trainersData = Array.isArray(apiData.data) ? apiData.data : [];
+      pagination = apiData.pagination || {};
+      console.log('🔍 Entrenadores extraídos del formato success:', trainersData.length);
+    } else if (response.data.status === 'success' && response.data.data) {
+      // Estructura: { status: 'success', data: { data: [...], pagination: {...} } }
+      const apiData = response.data.data;
+      trainersData = Array.isArray(apiData.data) ? apiData.data : [];
+      pagination = apiData.pagination || {};
+      console.log('🔍 Entrenadores extraídos del formato status success:', trainersData.length);
     } else {
+      // Fallback: intentar extraer directamente
       trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
       pagination = response.data?.pagination || {};
+      console.log('🔍 Entrenadores extraídos del fallback:', trainersData.length);
     }
+
+    console.log('🔍 Array de entrenadores a mapear:', trainersData);
 
     const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
 
