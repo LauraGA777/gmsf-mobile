@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,46 +15,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiService } from '../services/api';
 
-// Types replicando la estructura de la versión web
 interface LoginFormData {
   correo: string;
   contrasena: string;
 }
 
-interface User {
-  id: string;
-  nombre: string;
-  correo: string;
-  id_rol: number;
-  roleCode?: string;
-  roleName?: string;
-  clientId?: string;
-}
-
-interface AuthResponse {
-  success: boolean;
-  error?: string;
-  data?: {
-    user: User;
-    accessToken: string;
-    refreshToken: string;
-  };
-}
-
 interface LoginScreenProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess?: () => void;
 }
-
-// Constantes de roles (replicando la versión web)
-const ROLES = {
-  ADMIN: 1,
-  TRAINER: 2,
-  CLIENT: 3,
-  BENEFICIARY: 4
-} as const;
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  // Estados del componente
   const [formData, setFormData] = useState<LoginFormData>({
     correo: '',
     contrasena: ''
@@ -66,7 +35,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [showContactInfo, setShowContactInfo] = useState(false);
   const [errors, setErrors] = useState<Partial<LoginFormData>>({});
 
-  // Verificación de token existente al montar el componente
   useEffect(() => {
     checkExistingToken();
   }, []);
@@ -74,104 +42,43 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const checkExistingToken = async () => {
     try {
       setIsCheckingToken(true);
-      const storedUser = await AsyncStorage.getItem('user');
-      const storedAccessToken = await AsyncStorage.getItem('accessToken');
-      const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
+      console.log('🔍 LoginScreen: Verificando token existente...');
 
-      if (storedUser && storedAccessToken && storedRefreshToken) {
+      const storedUser = await apiService.getStoredUser();
+      const storedToken = await apiService.getStoredToken();
+
+      if (storedUser && storedToken && storedUser.id_rol === 1) {
+        console.log('👤 Usuario encontrado:', storedUser.nombre);
+
         try {
-          const parsedUser = JSON.parse(storedUser) as User;
+          await apiService.checkTokenStatus();
+          console.log('✅ Token válido');
 
-          if (parsedUser.id && parsedUser.id_rol) {
-            // Verificar que el token sea válido
-            const isValid = await verifyToken(storedAccessToken);
-            if (isValid) {
-              console.log('✅ Token válido encontrado, redirigiendo...');
-              onLoginSuccess();
-              return;
-            } else {
-              // Token inválido, limpiar storage
-              await clearAuthData();
-            }
+          if (onLoginSuccess) {
+            onLoginSuccess();
           }
+          return;
         } catch (error) {
-          console.log('❌ Error parsing stored user data');
-          await clearAuthData();
+          console.log('❌ Token inválido, limpiando datos');
+          await apiService.clearSession();
+        }
+      } else {
+        console.log('ℹ️ No hay sesión activa');
+        if (storedUser && storedUser.id_rol !== 1) {
+          await apiService.clearSession();
         }
       }
     } catch (error) {
-      console.error('Error checking existing token:', error);
+      console.error('💥 Error verificando token:', error);
+      await apiService.clearSession();
     } finally {
       setIsCheckingToken(false);
     }
   };
 
-  const verifyToken = async (token: string): Promise<boolean> => {
-    try {
-      const API_URL = 'https://gmsf-backend.vercel.app';
-      const response = await fetch(`${API_URL}/auth/profile`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      return response.ok;
-    } catch (error) {
-      console.log('❌ Error verificando token:', error);
-      return false;
-    }
-  };
-
-  const clearAuthData = async () => {
-    try {
-      await AsyncStorage.multiRemove([
-        'user',
-        'accessToken',
-        'refreshToken'
-      ]);
-    } catch (error) {
-      console.error('Error clearing auth data:', error);
-    }
-  };
-
-  // Función para limpiar completamente todos los datos (para pruebas)
-  const clearAllCache = async () => {
-    try {
-      console.log('🧹 Limpiando completamente el cache...');
-
-      // Limpiar todos los datos de AsyncStorage
-      await AsyncStorage.clear();
-
-      // Reiniciar el estado del formulario
-      setFormData({
-        correo: '',
-        contrasena: ''
-      });
-      setErrors({});
-      setIsLoading(false);
-      setIsCheckingToken(false);
-      setShowPassword(false);
-      setShowContactInfo(false);
-
-      console.log('✅ Cache limpiado completamente');
-      Alert.alert(
-        'Cache Limpiado',
-        'Todos los datos almacenados han sido eliminados. Ahora puedes hacer login normalmente.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('❌ Error limpiando cache:', error);
-      Alert.alert('Error', 'No se pudo limpiar el cache completamente');
-    }
-  };
-
-  // Validaciones del formulario (replicando la lógica web)
   const validateForm = (): boolean => {
     const newErrors: Partial<LoginFormData> = {};
 
-    // Validación de email
     if (!formData.correo.trim()) {
       newErrors.correo = 'El correo es requerido';
     } else {
@@ -181,7 +88,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       }
     }
 
-    // Validación de contraseña
     if (!formData.contrasena.trim()) {
       newErrors.contrasena = 'La contraseña es requerida';
     } else if (formData.contrasena.length < 4) {
@@ -192,98 +98,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Función de login principal (replicando la funcionalidad web)
   const handleLogin = async () => {
     try {
       setIsLoading(true);
       setErrors({});
 
-      // Validar formulario
+      console.log('🔑 Intentando login:', { correo: formData.correo });
+
       if (!validateForm()) {
+        console.log('❌ Validación de formulario falló');
         return;
       }
 
-      console.log('🔄 Intentando login con:', { correo: formData.correo });
+      const response = await apiService.login(
+        formData.correo.trim().toLowerCase(),
+        formData.contrasena
+      );
 
-      // Verificar configuración de API
-      const API_URL = 'https://gmsf-backend.vercel.app'; // Tu URL de API
-      if (!API_URL) {
-        throw new Error('URL de API no configurada');
+      if (response.success) {
+        console.log('🎉 Login exitoso');
+
+        const storedUser = await apiService.getStoredUser();
+        const storedToken = await apiService.getStoredToken();
+
+        if (storedUser && storedToken && storedUser.id_rol === 1) {
+          console.log('✅ Acceso confirmado');
+
+          if (onLoginSuccess) {
+            onLoginSuccess();
+          }
+        } else {
+          throw new Error('Error interno: Datos de sesión no válidos');
+        }
+      } else {
+        throw new Error(response.error || 'Error desconocido en el login');
       }
-
-      // Realizar petición de login
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          correo: formData.correo.trim().toLowerCase(),
-          contrasena: formData.contrasena
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.message || data.error || 'Credenciales incorrectas';
-        throw new Error(errorMessage);
-      }
-
-      // Procesar respuesta del servidor
-      if (!data || typeof data !== 'object') {
-        throw new Error('Respuesta del servidor inválida');
-      }
-
-      const authData = data;
-      const userData = authData.data?.user || authData.user || authData.data || {};
-
-      const tokens = {
-        accessToken: authData.data?.accessToken || authData.accessToken || authData.token,
-        refreshToken: authData.data?.refreshToken || authData.refreshToken,
-      };
-
-      if (!tokens.accessToken) {
-        throw new Error('Token de acceso no recibido del servidor');
-      }
-
-      if (!userData || typeof userData !== 'object' || !userData.id) {
-        throw new Error('Datos de usuario inválidos recibidos del servidor');
-      }
-
-      // Normalizar datos del usuario
-      const normalizedUser: User = {
-        id: userData.id.toString(),
-        nombre: userData.nombre || userData.nombre_usuario || userData.name || '',
-        correo: userData.correo || userData.email || formData.correo,
-        id_rol: userData.id_rol || userData.rol_id || userData.roleId || null,
-      };
-
-      // Verificar campos requeridos
-      if (!normalizedUser.id || !normalizedUser.id_rol) {
-        throw new Error('Datos de usuario incompletos recibidos del servidor');
-      }
-
-      // Guardar datos en AsyncStorage - usando las claves correctas del Config
-      await AsyncStorage.setItem('user', JSON.stringify(normalizedUser));
-      await AsyncStorage.setItem('authToken', tokens.accessToken); // Cambio aquí: usar 'authToken' en lugar de 'accessToken'
-      if (tokens.refreshToken) {
-        await AsyncStorage.setItem('refreshToken', tokens.refreshToken);
-      }
-
-      console.log('✅ Login exitoso para:', normalizedUser.nombre);
-
-      // Verificar que el token se guardó correctamente
-      await apiService.checkTokenStatus();
-
-      // Llamar inmediatamente a onLoginSuccess para redireccionar
-      console.log('🔄 Ejecutando onLoginSuccess...');
-
-      // Pequeño delay para asegurar que AsyncStorage termine de guardar
-      setTimeout(() => {
-        onLoginSuccess();
-        console.log('✅ onLoginSuccess ejecutado - debería redireccionar ahora');
-      }, 100);
 
     } catch (error: any) {
       console.error('💥 Error en login:', error);
@@ -291,52 +140,55 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       let errorMessage = 'Error al iniciar sesión';
 
       if (error.message) {
-        errorMessage = error.message;
+        if (error.message.includes('Acceso denegado')) {
+          errorMessage = 'Acceso denegado. No tienes permisos para usar esta aplicación.';
+        } else if (error.message.includes('Credenciales incorrectas')) {
+          errorMessage = 'Credenciales incorrectas. Verifica tu email y contraseña.';
+        } else if (error.message.includes('Usuario no encontrado')) {
+          errorMessage = 'Usuario no encontrado en el sistema.';
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Error de conexión. Verifica tu internet.';
+        } else {
+          errorMessage = error.message;
+        }
       } else if (error.response?.status === 401) {
-        errorMessage = 'Credenciales incorrectas. Verifica tu email y contraseña.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Usuario no encontrado. Verifica tu email.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Error del servidor. Intenta nuevamente en unos momentos.';
+        errorMessage = 'Credenciales incorrectas.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Acceso denegado.';
       } else if (!error.response) {
-        errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
+        errorMessage = 'Error de conexión.';
       }
 
-      Alert.alert('Error de Inicio de Sesión', errorMessage);
+      Alert.alert('Error de Inicio de Sesión', errorMessage, [
+        { text: 'OK' },
+        {
+          text: 'Contactar Admin',
+          onPress: () => setShowContactInfo(true)
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Manejadores de input
   const handleInputChange = (field: keyof LoginFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-
-    // Limpiar error del campo cuando el usuario empiece a escribir
+    setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: undefined
-      }));
+      setErrors(prev => ({ ...prev, [field]: undefined }));
     }
   };
 
   const handleForgotPassword = () => {
     Alert.alert(
       'Recuperar Contraseña',
-      'Contacta al administrador para recuperar tu contraseña.',
-      [{ text: 'Entendido' }]
+      'Para recuperar tu contraseña, contacta al administrador del sistema.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Contactar', onPress: () => setShowContactInfo(true) }
+      ]
     );
   };
 
-  const handleContactAdmin = () => {
-    setShowContactInfo(true);
-  };
-
-  // Loading screen mientras verifica token
   if (isCheckingToken) {
     return (
       <SafeAreaView style={styles.container}>
@@ -361,37 +213,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <View style={styles.formContainer}>
 
             {showContactInfo ? (
-              // Contact Info Card (replicando la funcionalidad web)
               <>
                 <View style={styles.header}>
+                  <Ionicons name="information-circle" size={48} color="#171717" />
                   <Text style={styles.title}>Contacto del Administrador</Text>
                   <Text style={styles.subtitle}>Información para solicitar acceso al sistema</Text>
                 </View>
 
                 <View style={styles.form}>
                   <View style={styles.contactInfoContainer}>
-                    <Text style={styles.contactInfoTitle}>StrongFit GYM</Text>
+                    <Text style={styles.contactInfoTitle}>🏋️ StrongFit GYM</Text>
                     <Text style={styles.contactInfoText}>
-                      <Text style={styles.contactInfoLabel}>Email:</Text> admin@strongfit.com
+                      <Text style={styles.contactInfoLabel}>📧 Email:</Text> admin@strongfit.com
                     </Text>
                     <Text style={styles.contactInfoText}>
-                      <Text style={styles.contactInfoLabel}>Teléfono:</Text> 300 123 4567
+                      <Text style={styles.contactInfoLabel}>📱 Teléfono:</Text> +57 300 123 4567
                     </Text>
                     <Text style={styles.contactInfoText}>
-                      <Text style={styles.contactInfoLabel}>Horario de atención:</Text> Lunes a Viernes, 9:00 AM - 6:00 PM
+                      <Text style={styles.contactInfoLabel}>🕒 Horario:</Text> Lunes a Viernes, 9:00 AM - 6:00 PM
                     </Text>
                   </View>
 
                   <View style={styles.contactInfoContainer}>
-                    <Text style={styles.contactInfoTitle}>Requisitos para solicitar acceso</Text>
-                    <Text style={styles.contactInfoText}>• Pertenecer a la organización</Text>
+                    <Text style={styles.contactInfoTitle}>📋 Requisitos para solicitar acceso</Text>
+                    <Text style={styles.contactInfoText}>• Ser miembro del gimnasio</Text>
+                    <Text style={styles.contactInfoText}>• Proporcionar identificación válida</Text>
+                    <Text style={styles.contactInfoText}>• Especificar el tipo de acceso requerido</Text>
                   </View>
 
                   <TouchableOpacity
                     style={[styles.loginButton, styles.outlineButton]}
                     onPress={() => setShowContactInfo(false)}
                   >
-                    <Ionicons name="arrow-back" size={20} color="#171717" />
+                    <Ionicons name="arrow-back" size={20} color="#ffffff" />
                     <Text style={[styles.loginButtonText, styles.outlineButtonText]}>
                       Volver al inicio de sesión
                     </Text>
@@ -399,7 +253,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </View>
               </>
             ) : (
-              // Login Form (replicando el diseño web)
               <>
                 <View style={styles.header}>
                   <Text style={styles.title}>Bienvenido</Text>
@@ -494,7 +347,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   <View style={styles.contactContainer}>
                     <Text style={styles.contactText}>¿No tienes cuenta? </Text>
                     <TouchableOpacity
-                      onPress={handleContactAdmin}
+                      onPress={() => setShowContactInfo(true)}
                       disabled={isLoading}
                     >
                       <Text style={styles.contactLink}>Contacta al administrador</Text>
@@ -514,21 +367,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    paddingHorizontal: 20,
   },
   keyboardAvoid: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    minHeight: '100%',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -539,19 +386,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     marginTop: 16,
+    textAlign: 'center',
   },
   formContainer: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 32,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowRadius: 12,
+    elevation: 8,
   },
   header: {
     alignItems: "center",
@@ -562,14 +407,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#171717",
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: "#6B7280",
     textAlign: "center",
+    lineHeight: 24,
   },
   form: {
-    gap: 20,
+    gap: 24,
   },
   inputGroup: {
     marginBottom: 4,
@@ -577,7 +424,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
@@ -586,6 +433,7 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: "#EF4444",
+    backgroundColor: "#FEF2F2",
   },
   errorText: {
     color: "#EF4444",
@@ -599,7 +447,7 @@ const styles = StyleSheet.create({
   passwordInput: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingRight: 50,
@@ -614,26 +462,32 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   forgotPasswordContainer: {
-    alignSelf: "flex-start",
+    alignSelf: "flex-end",
     marginTop: -8,
   },
   forgotPasswordText: {
-    color: "#374151",
+    color: "#6B7280",
     fontSize: 14,
+    fontWeight: '500',
   },
   loginButton: {
     backgroundColor: "#171717",
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 8,
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   outlineButton: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
+    backgroundColor: "#171717",
+    borderWidth: 2,
     borderColor: "#171717",
   },
   buttonDisabled: {
@@ -645,59 +499,46 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   outlineButtonText: {
-    color: "#171717",
+    color: "#FFFFFF",
   },
   contactContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
+    flexWrap: 'wrap',
   },
   contactText: {
     color: "#6B7280",
     fontSize: 14,
   },
   contactLink: {
-    color: "#374151",
+    color: "#171717",
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
   },
-  // Debug styles (temporal para pruebas)
-  debugContainer: {
-    marginTop: 20,
-    alignItems: "center",
-  },
-  clearCacheButton: {
-    backgroundColor: "#DC2626",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    opacity: 0.8,
-  },
-  clearCacheText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  // Contact Info Styles
   contactInfoContainer: {
     backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: 12,
+    padding: 20,
     marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#171717",
   },
   contactInfoTitle: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#171717",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   contactInfoText: {
-    fontSize: 14,
+    fontSize: 15,
     color: "#374151",
-    marginBottom: 4,
+    marginBottom: 8,
+    lineHeight: 22,
   },
   contactInfoLabel: {
     fontWeight: "600",
+    color: "#171717",
   },
 });

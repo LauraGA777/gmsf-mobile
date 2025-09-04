@@ -21,21 +21,13 @@ export interface LoginResponse {
 }
 
 export interface User {
-  id: number;
-  codigo?: string;
+  id: string; // Cambiado de number a string para consistencia
   nombre: string;
-  apellido?: string;
   correo: string;
-  telefono?: string;
-  direccion?: string;
-  genero?: string;
-  tipo_documento?: string;
-  numero_documento?: string;
-  fecha_nacimiento?: string;
-  asistencias_totales?: number;
-  estado?: boolean;
   id_rol: number;
-  rol?: any;
+  roleCode?: string;
+  roleName?: string;
+  clientId?: string;
 }
 
 // Tipos para el Dashboard
@@ -69,7 +61,7 @@ export interface IncomeData {
 
 // Tipos para Entrenadores
 export interface Trainer {
-  id: string;
+  id: string; // También string
   nombre: string;
   apellido: string;
   email: string;
@@ -94,7 +86,7 @@ export interface CreateTrainerRequest {
 
 // Tipos para Clientes
 export interface Client {
-  id: string;
+  id: string; // También string
   nombre: string;
   apellido: string;
   email: string;
@@ -104,7 +96,7 @@ export interface Client {
   fechaNacimiento: string;
   fechaRegistro: string;
   activo: boolean;
-  membresia?: Membership;
+  membresia?: any;
   beneficiarios?: Client[];
 }
 
@@ -164,3 +156,10 @@ export interface PaginatedResponse<T> {
   limit: number;
   totalPages: number;
 }
+
+export interface PaginationParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+

@@ -2,19 +2,46 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import Config from '../constants/config';
 import {
-  ApiResponse,
+  PaginatedResponse,
+  PaginationParams,
   Client,
   CreateClientRequest,
-  LoginResponse,
   Trainer,
   User
 } from '../types';
+
+// Interface para la respuesta de login real
+interface LoginApiResponse {
+  status: string;
+  message: string;
+  data: {
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: number;
+      nombre: string;
+      correo: string;
+      id_rol: number;
+      id_persona: number | null;
+    };
+  };
+}
+
+// Interface simplificada para administradores
+interface LoginResponse {
+  success: boolean;
+  error?: string;
+  data?: {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+  };
+}
 
 class ApiService {
   private api: AxiosInstance;
 
   constructor() {
-    // API desplegada en Vercel
     this.api = axios.create({
       baseURL: Config.API_BASE_URL,
       timeout: Config.API_TIMEOUT,
@@ -27,191 +54,233 @@ class ApiService {
   }
 
   private setupInterceptors(): void {
-    // Request interceptor para agregar token
+    // Request interceptor
     this.api.interceptors.request.use(
       async (config) => {
         const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
-        console.log(`🔍 Request interceptor - URL: ${config.url}`);
-        console.log(`🔍 Token encontrado: ${token ? `${token.substring(0, 20)}...` : 'NO TOKEN'}`);
+        console.log(`🔍 Request: ${config.method?.toUpperCase()} ${config.url}`);
 
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-          console.log(`✅ Token agregado a headers: Bearer ${token.substring(0, 20)}...`);
-        } else {
-          console.log(`❌ No se encontró token en AsyncStorage`);
         }
         return config;
       },
       (error) => {
+        console.error('❌ Request error:', error);
         return Promise.reject(error);
       }
     );
 
-    // Response interceptor para manejar errores
+    // Response interceptor
     this.api.interceptors.response.use(
       (response) => {
-        console.log(`✅ API Success: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+        console.log(`✅ Response: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
         return response;
       },
       async (error) => {
-        console.error(`❌ API Error: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
-          status: error.response?.status,
-          message: error.message,
-          data: error.response?.data,
-        });
+        const status = error.response?.status;
+        console.error(`❌ API Error: ${status}`, error.response?.data);
 
-        if (error.response?.status === 401) {
-          await AsyncStorage.removeItem(Config.AUTH.TOKEN_KEY);
-          // Aquí podrías redirigir al login
+        if (status === 401) {
+          console.log('🔄 Token expirado, limpiando sesión...');
+          await this.clearSession();
         }
+
         return Promise.reject(error);
       }
     );
   }
 
-  // Authentication
+  // MÉTODO DE LOGIN SOLO PARA ADMINISTRADORES
   async login(correo: string, contrasena: string): Promise<LoginResponse> {
-    console.log('🔑 Intentando login con:', { correo });
-
-    const response: AxiosResponse<LoginResponse> = await this.api.post(Config.ENDPOINTS.AUTH_LOGIN, {
-      correo,
-      contrasena
-    });
-
-    console.log('✅ Login exitoso:', {
-      status: response.data.status,
-      user: response.data.data?.user?.correo
-    });
-
-    // Guardar el token y la información del usuario
-    if (response.data.status === 'success' && response.data.data.accessToken) {
-      await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, response.data.data.accessToken);
-      await AsyncStorage.setItem('refreshToken', response.data.data.refreshToken);
-      await AsyncStorage.setItem('userInfo', JSON.stringify(response.data.data.user));
-
-      // Establecer el token en los headers por defecto
-      this.api.defaults.headers.common['Authorization'] = `Bearer ${response.data.data.accessToken}`;
-
-      console.log(`🔑 Token guardado con clave: ${Config.AUTH.TOKEN_KEY}`);
-    }
-
-    return response.data;
-  }
-
-  async logout(): Promise<void> {
     try {
-      // Llamar al endpoint de logout del backend
-      await this.api.post(Config.ENDPOINTS.AUTH_LOGOUT);
-    } catch (error) {
-      console.log('Error en logout del servidor:', error);
-    } finally {
-      // Limpiar datos locales
-      await AsyncStorage.removeItem(Config.AUTH.TOKEN_KEY);
-      await AsyncStorage.removeItem('refreshToken');
-      await AsyncStorage.removeItem('userInfo');
-      delete this.api.defaults.headers.common['Authorization'];
-      console.log('🚪 Logout completado');
+      console.log('🔑 Intentando login de administrador:', { correo });
+
+      const response: AxiosResponse<LoginApiResponse> = await this.api.post(Config.ENDPOINTS.AUTH_LOGIN, {
+        correo,
+        contrasena
+      });
+
+      console.log('✅ Respuesta de login:', response.data);
+
+      if (response.data.status === 'success' && response.data.data) {
+        const { accessToken, refreshToken, user } = response.data.data;
+
+        // ✅ VALIDACIÓN CRÍTICA: Solo administradores pueden acceder
+        if (user.id_rol !== 1) {
+          console.log('❌ Acceso denegado: Usuario no es administrador', {
+            rol: user.id_rol,
+            usuario: user.nombre
+          });
+
+          return {
+            success: false,
+            error: 'Acceso denegado. Esta aplicación es exclusiva para administradores del gimnasio.'
+          };
+        }
+
+        // Guardar datos de sesión
+        await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, accessToken);
+        await AsyncStorage.setItem('refreshToken', refreshToken);
+        await AsyncStorage.setItem('userInfo', JSON.stringify(user));
+
+        // Establecer token en headers
+        this.api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
+        console.log('✅ Administrador autenticado correctamente:', user.nombre);
+
+        // Mapear usuario para compatibilidad
+        const mappedUser: User = {
+          id: String(user.id),
+          nombre: user.nombre,
+          correo: user.correo,
+          id_rol: user.id_rol,
+          roleCode: 'ADMIN',
+          roleName: 'Administrador',
+        };
+
+        return {
+          success: true,
+          data: {
+            user: mappedUser,
+            accessToken,
+            refreshToken
+          }
+        };
+      } else {
+        throw new Error(response.data.message || 'Error en el login');
+      }
+
+    } catch (error: any) {
+      console.error('💥 Error en login:', error);
+
+      let errorMessage = 'Error al iniciar sesión';
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Credenciales incorrectas. Verifica tu email y contraseña.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Acceso denegado. Esta aplicación es exclusiva para administradores.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Error del servidor. Intenta nuevamente en unos momentos.';
+      } else if (!error.response) {
+        errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
+      }
+
+      return {
+        success: false,
+        error: errorMessage
+      };
     }
   }
 
-  // Limpiar sesión local sin llamar al backend (para tokens expirados)
-  async clearSession(): Promise<void> {
-    try {
-      console.log('🧹 Limpiando sesión del apiService...');
-      // Limpiar todas las claves de autenticación posibles
-      await AsyncStorage.multiRemove([
-        Config.AUTH.TOKEN_KEY,  // 'authToken'
-        'refreshToken',
-        'userInfo',
-        'user',              // Para compatibilidad
-        'accessToken'        // Para compatibilidad
-      ]);
-
-      // Limpiar headers de autorización
-      delete this.api.defaults.headers.common['Authorization'];
-
-      console.log('✅ Sesión local limpiada completamente');
-    } catch (e) {
-      console.error('❌ Error limpiando sesión local:', e);
-    }
-  }
-
+  // Métodos de sesión simplificados
   async getStoredToken(): Promise<string | null> {
-    return await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
+    try {
+      return await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
+    } catch (error) {
+      console.error('Error obteniendo token:', error);
+      return null;
+    }
   }
 
   async getStoredUser(): Promise<User | null> {
     try {
       const userJson = await AsyncStorage.getItem('userInfo');
-      return userJson ? JSON.parse(userJson) : null;
+
+      if (userJson) {
+        const userData = JSON.parse(userJson);
+
+        // Convertir formato de API a formato de app
+        return {
+          id: String(userData.id),
+          nombre: userData.nombre,
+          correo: userData.correo,
+          id_rol: userData.id_rol,
+          roleCode: 'ADMIN',
+          roleName: 'Administrador',
+        };
+      }
+
+      return null;
     } catch (error) {
-      console.error('Error al obtener usuario almacenado:', error);
+      console.error('Error obteniendo usuario:', error);
       return null;
     }
   }
 
-  // Función para verificar el estado del token
-  async checkTokenStatus(): Promise<void> {
-    const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
-    const userInfo = await AsyncStorage.getItem('userInfo');
+  async clearSession(): Promise<void> {
+    try {
+      console.log('🧹 Limpiando sesión de administrador...');
 
-    console.log('🔍 Estado del token:');
-    console.log('  - Token:', token ? `${token.substring(0, 20)}...` : 'NO ENCONTRADO');
-    console.log('  - UserInfo:', userInfo ? 'ENCONTRADO' : 'NO ENCONTRADO');
-    console.log('  - Headers Authorization:', this.api.defaults.headers.common['Authorization'] || 'NO ESTABLECIDO');
+      await AsyncStorage.multiRemove([
+        Config.AUTH.TOKEN_KEY,
+        'refreshToken',
+        'userInfo'
+      ]);
+
+      delete this.api.defaults.headers.common['Authorization'];
+
+      console.log('✅ Sesión de administrador limpiada');
+    } catch (error) {
+      console.error('❌ Error limpiando sesión:', error);
+    }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.api.post(Config.ENDPOINTS.AUTH_LOGOUT);
+      console.log('✅ Logout exitoso en servidor');
+    } catch (error) {
+      console.warn('⚠️ Error en logout del servidor:', error);
+    } finally {
+      await this.clearSession();
+    }
+  }
+
+  async checkTokenStatus(): Promise<void> {
+    const token = await this.getStoredToken();
+    if (!token) {
+      throw new Error('No token found');
+    }
+
+    // Verificar token con el servidor
+    await this.api.get('/auth/profile');
   }
 
   async getProfile(): Promise<User> {
-    const response = await this.api.get('/auth/profile');
-    console.log('✅ Perfil obtenido:', response.data);
-
-    if (response.data.status === 'success') {
-      return response.data.data.usuario;
-    }
-
-    throw new Error('Error al obtener perfil');
-  }
-
-  async setToken(token: string): Promise<void> {
-    await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, token);
-    this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log('🔑 Token establecido correctamente');
-  }
-
-  // Método temporal para establecer un token de demo
-  async setDemoToken(): Promise<void> {
-    // Token de ejemplo - reemplazar con uno real o implementar login
-    const demoToken = 'demo-token-for-testing';
-    await AsyncStorage.setItem(Config.AUTH.TOKEN_KEY, demoToken);
-    console.log('🔑 Token de demo establecido');
-  }
-
-  // Dashboard endpoints
-  async getDashboardStats(): Promise<any> {
     try {
-      const response = await this.api.get(Config.ENDPOINTS.DASHBOARD_STATS);
-      // Extraer los datos del formato real de la API
-      return response.data?.data || response.data;
+      const response = await this.api.get('/auth/profile');
+
+      if (response.data.status === 'success') {
+        const userData = response.data.data.usuario || response.data.data;
+
+        // Verificar que sigue siendo administrador
+        if (userData.id_rol !== 1) {
+          throw new Error('Usuario ya no es administrador');
+        }
+
+        return {
+          id: String(userData.id),
+          nombre: userData.nombre,
+          correo: userData.correo,
+          id_rol: userData.id_rol,
+          roleCode: 'ADMIN',
+          roleName: 'Administrador',
+        };
+      }
+
+      throw new Error('Error al obtener perfil');
     } catch (error) {
-      console.error('Error getting dashboard stats:', error);
+      console.error('Error obteniendo perfil:', error);
       throw error;
     }
   }
 
-  async getOptimizedStats(): Promise<any> {
-    try {
-      const response = await this.api.get(Config.ENDPOINTS.DASHBOARD_OPTIMIZED);
-      // Extraer los datos del formato real de la API
-      return response.data?.data || response.data;
-    } catch (error) {
-      console.error('Error getting optimized stats:', error);
-      throw error;
-    }
-  }
-
-  // Helpers para mapear modelos de backend a modelos de app
+  // Mappers simplificados
   private mapTrainerFromApi(item: any): Trainer {
-    const usuario = item.usuario || {};
+    const usuario = item.usuario || item;
     return {
       id: String(item.id ?? item.id_entrenador ?? usuario.id ?? Math.random()),
       nombre: usuario.nombre || '',
@@ -228,7 +297,7 @@ class ApiService {
   }
 
   private mapClientFromApi(item: any): Client {
-    const usuario = item.usuario || {};
+    const usuario = item.usuario || item;
     return {
       id: String(item.id_persona ?? item.id ?? usuario.id ?? Math.random()),
       nombre: usuario.nombre || '',
@@ -247,53 +316,180 @@ class ApiService {
     };
   }
 
-  // Trainers endpoints
-  async getTrainers(params?: { search?: string; page?: number; limit?: number }): Promise<any> {
+  // ENTRENADORES
+  async getTrainers(params?: PaginationParams): Promise<PaginatedResponse<Trainer>> {
+  try {
+    console.log('🔄 Admin: Obteniendo entrenadores...');
+
+    const queryParams = {
+      pagina: params?.page ?? 1,
+      limite: params?.limit ?? 10,
+      q: params?.search ?? undefined,
+    };
+
+    const response = await this.api.get(Config.ENDPOINTS.TRAINERS, { params: queryParams });
+
+    console.log('✅ Entrenadores obtenidos:', response.data);
+
+    let trainersData: any[] = [];
+    let pagination: any = {};
+
+    if (response.data.status === 'success') {
+      const data = response.data.data;
+      trainersData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      pagination = data?.pagination || {};
+    } else {
+      trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
+      pagination = response.data?.pagination || {};
+    }
+
+    const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
+
+    const totalCount = pagination.total ?? mappedTrainers.length;
+    const currentLimit = queryParams.limite;
+
+    return {
+      data: mappedTrainers,
+      total: totalCount,
+      page: pagination.page ?? queryParams.pagina,
+      limit: pagination.limit ?? currentLimit,
+      totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
+    };
+
+  } catch (error) {
+    console.error('💥 Error obteniendo entrenadores:', error);
+
+    return {
+      data: [],
+      total: 0,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      totalPages: 0,
+    };
+  }
+}
+
+  // CLIENTES
+  async getClients(params?: PaginationParams): Promise<PaginatedResponse<Client>> {
+  try {
+    console.log('🔄 Admin: Obteniendo clientes...');
+
+    const queryParams = {
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      search: params?.search ?? undefined,
+    };
+
+    const response = await this.api.get(Config.ENDPOINTS.CLIENTS, { params: queryParams });
+
+    console.log('✅ Clientes obtenidos:', response.data);
+
+    let clientsData: any[] = [];
+    let pagination: any = {};
+
+    if (response.data.status === 'success') {
+      const data = response.data.data;
+      clientsData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      pagination = data?.pagination || {};
+    } else {
+      clientsData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
+      pagination = response.data?.pagination || {};
+    }
+
+    const mappedClients: Client[] = clientsData.map(this.mapClientFromApi.bind(this));
+
+    const totalCount = pagination.total ?? mappedClients.length;
+    const currentLimit = queryParams.limit;
+
+    return {
+      data: mappedClients,
+      total: totalCount,
+      page: pagination.page ?? queryParams.page,
+      limit: pagination.limit ?? currentLimit,
+      totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
+    };
+
+  } catch (error) {
+    console.error('💥 Error obteniendo clientes:', error);
+
+    return {
+      data: [],
+      total: 0,
+      page: params?.page ?? 1,
+      limit: params?.limit ?? 10,
+      totalPages: 0,
+    };
+  }
+}
+
+  // DASHBOARD
+  async getMobileQuickSummary(period: 'today' | 'week' | 'month' = 'today'): Promise<any> {
     try {
-      // Backend espera: pagina, limite, q
-      const defaultParams = {
-        pagina: params?.page ?? 1,
-        limite: params?.limit ?? 10,
-        q: params?.search ?? undefined,
-      } as any;
+      console.log('🔄 Admin: Obteniendo resumen del dashboard...');
 
-      const response = await this.api.get(Config.ENDPOINTS.TRAINERS, { params: defaultParams });
+      const response = await this.api.get('/dashboard-mobile/quick-summary', {
+        params: { period, compact: true }
+      });
 
-      const payload = response.data?.data || response.data;
-      const rawList: any[] = Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload)
-          ? payload
-          : [];
+      console.log('✅ Resumen dashboard obtenido:', response.data);
 
-      const mapped = rawList.map(this.mapTrainerFromApi.bind(this));
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
 
-      const pagination = payload?.pagination || {};
-      return {
-        data: mapped,
-        total: pagination.total ?? 0,
-        page: pagination.page ?? defaultParams.pagina,
-        limit: pagination.limit ?? defaultParams.limite,
-        totalPages: pagination.totalPages ?? undefined,
-      };
-    } catch (error) {
-      console.error('Error getting trainers:', error);
-      // Retornar estructura vacía en caso de error
-      return {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 10,
-      };
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      console.error('💥 Error obteniendo resumen dashboard:', error);
+      throw error;
     }
   }
 
+  async getMobileMainMetrics(period: 'today' | 'week' | 'month' = 'today'): Promise<any> {
+    try {
+      console.log('🔄 Admin: Obteniendo métricas principales...');
+
+      const response = await this.api.get('/dashboard-mobile/main-metrics', {
+        params: { period }
+      });
+
+      console.log('✅ Métricas principales obtenidas:', response.data);
+
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      console.error('💥 Error obteniendo métricas principales:', error);
+      throw error;
+    }
+  }
+
+  async getMobileWidget(): Promise<any> {
+    try {
+      console.log('🔄 Admin: Obteniendo widget...');
+
+      const response = await this.api.get('/dashboard-mobile/widget');
+
+      console.log('✅ Widget obtenido:', response.data);
+
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+
+      return response.data?.data || response.data;
+    } catch (error: any) {
+      console.error('💥 Error obteniendo widget:', error);
+      throw error;
+    }
+  }
+
+  // Resto de métodos CRUD simplificados...
   async getTrainer(id: string): Promise<any> {
     try {
       const response = await this.api.get(`${Config.ENDPOINTS.TRAINERS}/${id}`);
-      const payload = response.data?.data || response.data;
-      const trainerRaw = payload?.trainer || payload;
-      return this.mapTrainerFromApi(trainerRaw);
+      const data = response.data.status === 'success' ? response.data.data : response.data;
+      return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
       console.error('Error getting trainer:', error);
       throw error;
@@ -303,8 +499,8 @@ class ApiService {
   async createTrainer(trainer: any): Promise<any> {
     try {
       const response = await this.api.post(Config.ENDPOINTS.TRAINERS, trainer);
-      const payload = response.data?.data || response.data;
-      return this.mapTrainerFromApi(payload?.trainer || payload);
+      const data = response.data.status === 'success' ? response.data.data : response.data;
+      return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
       console.error('Error creating trainer:', error);
       throw error;
@@ -314,28 +510,10 @@ class ApiService {
   async updateTrainer(id: string, trainer: any): Promise<any> {
     try {
       const response = await this.api.put(`${Config.ENDPOINTS.TRAINERS}/${id}`, trainer);
-      const payload = response.data?.data || response.data;
-      return this.mapTrainerFromApi(payload?.trainer || payload);
+      const data = response.data.status === 'success' ? response.data.data : response.data;
+      return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
       console.error('Error updating trainer:', error);
-      throw error;
-    }
-  }
-
-  async activateTrainer(id: string): Promise<void> {
-    try {
-      await this.api.patch(`${Config.ENDPOINTS.TRAINERS}/${id}/activate`);
-    } catch (error) {
-      console.error('Error activating trainer:', error);
-      throw error;
-    }
-  }
-
-  async deactivateTrainer(id: string): Promise<void> {
-    try {
-      await this.api.patch(`${Config.ENDPOINTS.TRAINERS}/${id}/deactivate`);
-    } catch (error) {
-      console.error('Error deactivating trainer:', error);
       throw error;
     }
   }
@@ -344,85 +522,35 @@ class ApiService {
     await this.api.delete(`${Config.ENDPOINTS.TRAINERS}/${id}`);
   }
 
-  // Clients endpoints
-  async getMyInfo(): Promise<Client> {
-    const response: AxiosResponse<ApiResponse<Client>> = await this.api.get(Config.ENDPOINTS.CLIENTS_ME);
-    const raw = response.data.data as any;
-    return this.mapClientFromApi(raw);
-  }
-
-  async getMyBeneficiaries(): Promise<Client[]> {
-    const response: AxiosResponse<ApiResponse<any[]>> = await this.api.get(Config.ENDPOINTS.CLIENTS_BENEFICIARIES);
-    const raw = response.data.data || [];
-    return raw.map((b: any) => this.mapClientFromApi(b.persona_beneficiaria || b));
-  }
-
-  async getClients(params?: { search?: string; page?: number; limit?: number }): Promise<any> {
-    try {
-      // Establecer parámetros por defecto para evitar NaN
-      const defaultParams = {
-        page: params?.page ?? 1,
-        limit: params?.limit ?? 10,
-        search: params?.search ?? undefined,
-      };
-
-      const response = await this.api.get(Config.ENDPOINTS.CLIENTS, { params: defaultParams });
-
-      const rawList: any[] = Array.isArray(response.data?.data)
-        ? response.data.data
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
-
-      const mapped = rawList.map(this.mapClientFromApi.bind(this));
-
-      const pg = response.data?.pagination || {};
-      return {
-        data: mapped,
-        total: pg.total ?? 0,
-        page: pg.page ?? defaultParams.page,
-        limit: pg.limit ?? defaultParams.limit,
-        totalPages: pg.totalPages ?? undefined,
-      };
-    } catch (error) {
-      console.error('Error getting clients:', error);
-      // Retornar estructura vacía en caso de error
-      return {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 10,
-      };
-    }
-  }
-
-  async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {
-    const response: AxiosResponse<ApiResponse<any>> =
-      await this.api.get(`${Config.ENDPOINTS.CLIENTS}/check-user/${tipoDocumento}/${numeroDocumento}`);
-    const raw = response.data.data;
-    return {
-      exists: !!raw,
-      client: raw ? this.mapClientFromApi({ usuario: raw, estado: true }) : undefined,
-    };
-  }
-
   async getClient(id: string): Promise<Client> {
-    const response: AxiosResponse<ApiResponse<any>> = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
-    return this.mapClientFromApi(response.data.data);
+    const response = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+    const data = response.data.status === 'success' ? response.data.data : response.data;
+    return this.mapClientFromApi(data);
   }
 
   async createClient(client: CreateClientRequest): Promise<Client> {
-    const response: AxiosResponse<ApiResponse<any>> = await this.api.post(Config.ENDPOINTS.CLIENTS, client as any);
-    return this.mapClientFromApi(response.data.data);
+    const response = await this.api.post(Config.ENDPOINTS.CLIENTS, client as any);
+    const data = response.data.status === 'success' ? response.data.data : response.data;
+    return this.mapClientFromApi(data);
   }
 
   async updateClient(id: string, client: Partial<CreateClientRequest>): Promise<Client> {
-    const response: AxiosResponse<ApiResponse<any>> = await this.api.put(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`, client as any);
-    return this.mapClientFromApi(response.data.data);
+    const response = await this.api.put(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`, client as any);
+    const data = response.data.status === 'success' ? response.data.data : response.data;
+    return this.mapClientFromApi(data);
   }
 
   async deleteClient(id: string): Promise<void> {
     await this.api.delete(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+  }
+
+  async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {
+    const response = await this.api.get(`${Config.ENDPOINTS.CLIENTS}/check-user/${tipoDocumento}/${numeroDocumento}`);
+    const data = response.data.status === 'success' ? response.data.data : response.data;
+    return {
+      exists: !!data,
+      client: data ? this.mapClientFromApi({ usuario: data, estado: true }) : undefined,
+    };
   }
 }
 
