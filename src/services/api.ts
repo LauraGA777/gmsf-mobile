@@ -2,10 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import Config from '../constants/config';
 import {
-  PaginatedResponse,
-  PaginationParams,
   Client,
   CreateClientRequest,
+  PaginatedResponse,
+  PaginationParams,
   Trainer,
   User
 } from '../types';
@@ -185,19 +185,31 @@ class ApiService {
     }
   }
 
-  async getStoredUser(): Promise<User | null> {
+  async getStoredUser(): Promise<any | null> {
     try {
       const userJson = await AsyncStorage.getItem('userInfo');
 
       if (userJson) {
         const userData = JSON.parse(userJson);
 
-        // Convertir formato de API a formato de app
+        // Convertir formato de API a formato de app con todos los campos disponibles
         return {
           id: String(userData.id),
+          codigo: userData.codigo,
           nombre: userData.nombre,
+          apellido: userData.apellido,
           correo: userData.correo,
+          telefono: userData.telefono,
+          direccion: userData.direccion,
+          genero: userData.genero,
+          tipo_documento: userData.tipo_documento,
+          numero_documento: userData.numero_documento,
+          fecha_nacimiento: userData.fecha_nacimiento,
           id_rol: userData.id_rol,
+          estado: userData.estado,
+          asistencias_totales: userData.asistencias_totales,
+          fecha_actualizacion: userData.fecha_actualizacion || userData.updatedAt,
+          rol: userData.rol,
           roleCode: 'ADMIN',
           roleName: 'Administrador',
         };
@@ -249,23 +261,45 @@ class ApiService {
     await this.api.get('/auth/profile');
   }
 
-  async getProfile(): Promise<User> {
+  async getProfile(): Promise<any> {
     try {
       const response = await this.api.get('/auth/profile');
 
       if (response.data.status === 'success') {
-        const userData = response.data.data.usuario || response.data.data;
+        const userData = response.data.data.usuario;
 
         // Verificar que sigue siendo administrador
         if (userData.id_rol !== 1) {
           throw new Error('Usuario ya no es administrador');
         }
 
+        // Mapear todos los datos del perfil completo
         return {
-          id: String(userData.id),
+          // Información básica
+          id: String(userData.id || Math.random()),
+          codigo: userData.codigo,
           nombre: userData.nombre,
+          apellido: userData.apellido,
           correo: userData.correo,
+          telefono: userData.telefono,
+          direccion: userData.direccion,
+          genero: userData.genero,
+
+          // Información de identificación
+          tipo_documento: userData.tipo_documento,
+          numero_documento: userData.numero_documento,
+          fecha_nacimiento: userData.fecha_nacimiento,
+
+          // Información del sistema
           id_rol: userData.id_rol,
+          estado: userData.estado,
+          asistencias_totales: userData.asistencias_totales,
+          fecha_actualizacion: userData.updatedAt || userData.fecha_actualizacion,
+
+          // Información del rol (incluye permisos y privilegios)
+          rol: userData.rol,
+
+          // Campos de compatibilidad con la app
           roleCode: 'ADMIN',
           roleName: 'Administrador',
         };
@@ -318,22 +352,23 @@ class ApiService {
 
   // ENTRENADORES
   async getTrainers(params?: PaginationParams): Promise<PaginatedResponse<Trainer>> {
-  try {
-    console.log('🔄 Admin: Obteniendo entrenadores...');
+    try {
+      console.log('🔄 Admin: Obteniendo entrenadores...');
 
-    const queryParams = {
-      pagina: params?.page ?? 1,
-      limite: params?.limit ?? 10,
-      q: params?.search ?? undefined,
-    };
+      const queryParams = {
+        pagina: params?.page ?? 1,
+        limite: params?.limit ?? 10,
+        q: params?.search ?? undefined,
+      };
 
-    const response = await this.api.get(Config.ENDPOINTS.TRAINERS, { params: queryParams });
+      const response = await this.api.get(Config.ENDPOINTS.TRAINERS, { params: queryParams });
 
-    console.log('✅ Entrenadores obtenidos:', response.data);
+      console.log('✅ Entrenadores obtenidos:', response.data);
 
-    let trainersData: any[] = [];
-    let pagination: any = {};
+      let trainersData: any[] = [];
+      let pagination: any = {};
 
+<<<<<<< HEAD
     // Extraer datos según la estructura de respuesta real
     if (response.data.success && response.data.data) {
       // Estructura: { success: true, data: { data: [...], pagination: {...} } }
@@ -379,61 +414,95 @@ class ApiService {
       limit: params?.limit ?? 10,
       totalPages: 0,
     };
+=======
+      if (response.data.status === 'success') {
+        const data = response.data.data;
+        trainersData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        pagination = data?.pagination || {};
+      } else {
+        trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
+        pagination = response.data?.pagination || {};
+      }
+
+      const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
+
+      const totalCount = pagination.total ?? mappedTrainers.length;
+      const currentLimit = queryParams.limite;
+
+      return {
+        data: mappedTrainers,
+        total: totalCount,
+        page: pagination.page ?? queryParams.pagina,
+        limit: pagination.limit ?? currentLimit,
+        totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
+      };
+
+    } catch (error) {
+      console.error('💥 Error obteniendo entrenadores:', error);
+
+      return {
+        data: [],
+        total: 0,
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 10,
+        totalPages: 0,
+      };
+    }
+>>>>>>> 0101c4666deec9fdddca62ce16b261727bac6ae4
   }
-}
 
   // CLIENTES
   async getClients(params?: PaginationParams): Promise<PaginatedResponse<Client>> {
-  try {
-    console.log('🔄 Admin: Obteniendo clientes...');
+    try {
+      console.log('🔄 Admin: Obteniendo clientes...');
 
-    const queryParams = {
-      page: params?.page ?? 1,
-      limit: params?.limit ?? 10,
-      search: params?.search ?? undefined,
-    };
+      const queryParams = {
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 10,
+        search: params?.search ?? undefined,
+      };
 
-    const response = await this.api.get(Config.ENDPOINTS.CLIENTS, { params: queryParams });
+      const response = await this.api.get(Config.ENDPOINTS.CLIENTS, { params: queryParams });
 
-    console.log('✅ Clientes obtenidos:', response.data);
+      console.log('✅ Clientes obtenidos:', response.data);
 
-    let clientsData: any[] = [];
-    let pagination: any = {};
+      let clientsData: any[] = [];
+      let pagination: any = {};
 
-    if (response.data.status === 'success') {
-      const data = response.data.data;
-      clientsData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-      pagination = data?.pagination || {};
-    } else {
-      clientsData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
-      pagination = response.data?.pagination || {};
+      if (response.data.status === 'success') {
+        const data = response.data.data;
+        clientsData = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+        pagination = data?.pagination || {};
+      } else {
+        clientsData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
+        pagination = response.data?.pagination || {};
+      }
+
+      const mappedClients: Client[] = clientsData.map(this.mapClientFromApi.bind(this));
+
+      const totalCount = pagination.total ?? mappedClients.length;
+      const currentLimit = queryParams.limit;
+
+      return {
+        data: mappedClients,
+        total: totalCount,
+        page: pagination.page ?? queryParams.page,
+        limit: pagination.limit ?? currentLimit,
+        totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
+      };
+
+    } catch (error) {
+      console.error('💥 Error obteniendo clientes:', error);
+
+      return {
+        data: [],
+        total: 0,
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 10,
+        totalPages: 0,
+      };
     }
-
-    const mappedClients: Client[] = clientsData.map(this.mapClientFromApi.bind(this));
-
-    const totalCount = pagination.total ?? mappedClients.length;
-    const currentLimit = queryParams.limit;
-
-    return {
-      data: mappedClients,
-      total: totalCount,
-      page: pagination.page ?? queryParams.page,
-      limit: pagination.limit ?? currentLimit,
-      totalPages: pagination.totalPages ?? Math.ceil(totalCount / currentLimit),
-    };
-
-  } catch (error) {
-    console.error('💥 Error obteniendo clientes:', error);
-
-    return {
-      data: [],
-      total: 0,
-      page: params?.page ?? 1,
-      limit: params?.limit ?? 10,
-      totalPages: 0,
-    };
   }
-}
 
   // DASHBOARD
   async getMobileQuickSummary(period: 'today' | 'week' | 'month' = 'today'): Promise<any> {
