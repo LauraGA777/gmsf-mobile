@@ -594,6 +594,11 @@ class ApiService {
     await this.api.delete(`${Config.ENDPOINTS.TRAINERS}/${id}`);
   }
 
+  async setTrainerActive(id: string, active: boolean): Promise<void> {
+  const url = active ? Config.ENDPOINTS.TRAINER_ACTIVATE(id) : Config.ENDPOINTS.TRAINER_DEACTIVATE(id);
+  await this.api.patch(url, {});
+  }
+
   async getClient(id: string): Promise<Client> {
     const response = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
     const data = response.data.status === 'success' ? response.data.data : response.data;
@@ -614,6 +619,11 @@ class ApiService {
 
   async deleteClient(id: string): Promise<void> {
     await this.api.delete(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+  }
+
+  async setClientActive(id: string, active: boolean): Promise<void> {
+  const url = active ? Config.ENDPOINTS.CLIENT_ACTIVATE(id) : Config.ENDPOINTS.CLIENT_DEACTIVATE(id);
+  await this.api.patch(url, {});
   }
 
   async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {

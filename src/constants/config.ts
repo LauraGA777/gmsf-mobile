@@ -42,6 +42,8 @@ export const Config = {
     CLIENTS_BENEFICIARIES: '/clients/me/beneficiaries',
     CLIENT_DETAIL: (id: string) => `/clients/${id}`,
     CLIENT_CHECK: (tipo: string, numero: string) => `/clients/check-user/${tipo}/${numero}`,
+  CLIENT_ACTIVATE: (id: string) => `/clients/${id}/activate`,
+  CLIENT_DEACTIVATE: (id: string) => `/clients/${id}/deactivate`,
 
   // Asistencias
   ATTENDANCE_TRENDS: '/attendance/trends',

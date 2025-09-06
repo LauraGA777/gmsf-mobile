@@ -201,6 +201,28 @@ export const ClientsScreen: React.FC = () => {
                 {client.activo ? 'Activo' : 'Inactivo'}
               </Text>
             </View>
+            <Pressable
+              accessibilityLabel={client.activo ? 'Desactivar cliente' : 'Activar cliente'}
+              onPress={async () => {
+                const original = client.activo;
+                setClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: !original } : c));
+                setFilteredClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: !original } : c));
+                try {
+                  await apiService.setClientActive(client.id, !original);
+                } catch (e) {
+                  setClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: original } : c));
+                  setFilteredClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: original } : c));
+                  Alert.alert('Error', 'No se pudo cambiar el estado del cliente');
+                }
+              }}
+              style={({ pressed }) => [styles.toggleButton, pressed && { opacity: 0.6 }]}
+            >
+              <MaterialIcons
+                name={client.activo ? 'toggle-on' : 'toggle-off'}
+                size={32}
+                color={client.activo ? Colors.success : Colors.textLight}
+              />
+            </Pressable>
           </View>
           <Text style={styles.clientDocument}>
             {client.tipoDocumento}: {client.numeroDocumento}
@@ -461,5 +483,11 @@ const styles = StyleSheet.create({
   membershipPeriod: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
+  },
+  toggleButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
 });

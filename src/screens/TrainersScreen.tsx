@@ -136,6 +136,30 @@ export const TrainersScreen: React.FC = () => {
                 {trainer.activo ? 'Activo' : 'Inactivo'}
               </Text>
             </View>
+            <Pressable
+              accessibilityLabel={trainer.activo ? 'Desactivar entrenador' : 'Activar entrenador'}
+              onPress={async () => {
+                const original = trainer.activo;
+                // Optimistic UI
+                setTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: !original } : t));
+                setFilteredTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: !original } : t));
+                try {
+                  await apiService.setTrainerActive(trainer.id, !original);
+                } catch (e) {
+                  // Revertir si falla
+                  setTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: original } : t));
+                  setFilteredTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: original } : t));
+                  Alert.alert('Error', 'No se pudo cambiar el estado. Intenta nuevamente.');
+                }
+              }}
+              style={({ pressed }) => [styles.toggleButton, pressed && { opacity: 0.6 }]}
+            >
+              <MaterialIcons
+                name={trainer.activo ? 'toggle-on' : 'toggle-off'}
+                size={32}
+                color={trainer.activo ? Colors.success : Colors.textLight}
+              />
+            </Pressable>
           </View>
           <Text style={styles.trainerSpecialty}>{trainer.especialidad}</Text>
           <Text style={styles.trainerExperience}>
@@ -305,6 +329,12 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     fontWeight: FontWeight.medium,
     color: Colors.surface,
+  },
+  toggleButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   trainerSpecialty: {
     fontSize: FontSize.md,
