@@ -223,9 +223,9 @@ export const DashboardScreen: React.FC = () => {
             </View>
             
             <View style={styles.cardContent}>
-              {/* Primera fila: 2 tarjetas */}
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryCardHalf}>
+              {/* Grid uniforme 2 columnas (mantiene simetría). Si elementos impares, ocupa con spacer invisible */}
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryItem}>
                   <SummaryCard
                     title="Asistencias"
                     value={data?.summary.totalAttendances || 0}
@@ -238,7 +238,7 @@ export const DashboardScreen: React.FC = () => {
                     }}
                   />
                 </View>
-                <View style={styles.summaryCardHalf}>
+                <View style={styles.summaryItem}>
                   <SummaryCard
                     title="Contratos Activos"
                     value={data?.summary.activeContracts || 0}
@@ -251,11 +251,7 @@ export const DashboardScreen: React.FC = () => {
                     } : undefined}
                   />
                 </View>
-              </View>
-
-              {/* Segunda fila: 2 tarjetas */}
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryCardHalf}>
+                <View style={styles.summaryItem}>
                   <SummaryCard
                     title="Ingresos"
                     value={data?.summary.monthlyRevenue || 0}
@@ -268,7 +264,7 @@ export const DashboardScreen: React.FC = () => {
                     } : undefined}
                   />
                 </View>
-                <View style={styles.summaryCardHalf}>
+                <View style={styles.summaryItem}>
                   <SummaryCard
                     title="Membresías Activas"
                     value={data?.summary.activeMemberships || 0}
@@ -281,11 +277,7 @@ export const DashboardScreen: React.FC = () => {
                     } : undefined}
                   />
                 </View>
-              </View>
-
-              {/* Tercera fila: 1 tarjeta centrada */}
-              <View style={styles.summaryRowSingle}>
-                <View style={styles.summaryCardCentered}>
+                <View style={styles.summaryItem}>
                   <SummaryCard
                     title="Nuevos Clientes"
                     value={data?.summary.newClients || 0}
@@ -298,6 +290,8 @@ export const DashboardScreen: React.FC = () => {
                     }}
                   />
                 </View>
+                {/* Espacio fantasma para completar la cuadrícula y mantener alineación visual */}
+                <View style={[styles.summaryItem, styles.summaryItemGhost]} />
               </View>
             </View>
           </View>
@@ -540,23 +534,17 @@ const styles = StyleSheet.create({
   },
 
   // Estilos de summary - Responsivos
-  summaryRow: {
+  summaryGrid: {
     flexDirection: 'row',
-    marginBottom: MARGINS.card,
-    gap: MARGINS.card,
+    flexWrap: 'wrap',
+    marginHorizontal: - (MARGINS.card / 2),
   },
-  summaryCardHalf: {
-    flex: 1,
-    minWidth: 0,
+  summaryItem: {
+    width: '50%',
+    paddingHorizontal: MARGINS.card / 2,
   },
-  summaryRowSingle: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: MARGINS.vertical * 2,
-    paddingHorizontal: MARGINS.horizontal / 2,
-  },
-  summaryCardCentered: {
-    width: Math.min(screenWidth * 0.48, 200),
+  summaryItemGhost: {
+    opacity: 0,
   },
 
   // Estilos de gráficas
