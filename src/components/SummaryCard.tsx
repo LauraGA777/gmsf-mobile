@@ -27,17 +27,17 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
     if (typeof val === 'number') {
       // Si es un número grande que parece dinero
       if (val >= 1000000) {
-        return `$ ${(val / 1000000).toFixed(1)}M`;
+        return `$${(val / 1000000).toFixed(1)}M`;
       } else if (val >= 1000) {
         // Si el título incluye "Ingreso" formatear como dinero
         if (title.toLowerCase().includes('ingreso')) {
-          return `$ ${(val / 1000).toFixed(0)}.000`;
+          return `$${(val / 1000).toFixed(0)}.000`;
         }
         return `${(val / 1000).toFixed(0)}K`;
       }
       // Si es dinero pequeño
       if (title.toLowerCase().includes('ingreso') && val > 0) {
-        return `$ ${val.toLocaleString()}`;
+        return `$${val.toLocaleString()}`;
       }
       return val.toString();
     }
@@ -51,11 +51,25 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
         <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
           <Ionicons name={icon as any} size={20} color={color} />
         </View>
-        <Text style={styles.title}>{title}</Text>
+        <Text
+          style={styles.title}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+        >
+          {title}
+        </Text>
       </View>
 
       {/* Valor principal */}
-      <Text style={styles.value}>{formatValue(value)}</Text>
+      <Text
+        style={styles.value}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
+        {formatValue(value)}
+      </Text>
 
       {/* Trending */}
       {trend && (
@@ -75,7 +89,13 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
       )}
 
       {/* Subtítulo */}
-      <Text style={styles.subtitle}>{subtitle}</Text>
+      <Text
+        style={styles.subtitle}
+        numberOfLines={2}
+        ellipsizeMode="tail"
+      >
+        {subtitle}
+      </Text>
     </View>
   );
 };
@@ -84,23 +104,23 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     marginBottom: 12,
     borderLeftWidth: 4,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    minHeight: 120,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 4,
+  minHeight: 112,
+  justifyContent: 'flex-start',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+    flexWrap: 'nowrap',
   },
   iconContainer: {
     width: 32,
@@ -111,22 +131,26 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   title: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textSecondary,
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    lineHeight: 16,
   },
   value: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '800',
     color: Colors.text,
-    marginBottom: 8,
-    lineHeight: 36,
+    marginBottom: 6,
+    lineHeight: 30,
+  includeFontPadding: false,
   },
   trendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   trendText: {
     fontSize: 14,
@@ -134,8 +158,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textLight,
-    lineHeight: 16,
+    lineHeight: 15,
+  marginTop: 2,
+  minHeight: 30, // reserva espacio para 2 líneas y uniforma altura
   },
 });

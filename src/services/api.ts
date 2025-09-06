@@ -531,6 +531,31 @@ class ApiService {
     }
   }
 
+  // ASISTENCIAS - Tendencias y estadísticas
+  async getAttendanceTrends(params: { mode?: 'weekly' | 'monthly'; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get(Config.ENDPOINTS.ATTENDANCE_TRENDS, {
+        params: params
+      });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo tendencias de asistencia:', error);
+      throw error;
+    }
+  }
+
+  async getAttendanceStats(params: { period?: 'daily' | 'weekly' | 'monthly' | 'yearly'; date?: string; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get(Config.ENDPOINTS.ATTENDANCE_STATS, { params });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo estadísticas de asistencia:', error);
+      throw error;
+    }
+  }
+
   // Resto de métodos CRUD simplificados...
   async getTrainer(id: string): Promise<any> {
     try {
@@ -569,6 +594,11 @@ class ApiService {
     await this.api.delete(`${Config.ENDPOINTS.TRAINERS}/${id}`);
   }
 
+  async setTrainerActive(id: string, active: boolean): Promise<void> {
+  const url = active ? Config.ENDPOINTS.TRAINER_ACTIVATE(id) : Config.ENDPOINTS.TRAINER_DEACTIVATE(id);
+  await this.api.patch(url, {});
+  }
+
   async getClient(id: string): Promise<Client> {
     const response = await this.api.get(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
     const data = response.data.status === 'success' ? response.data.data : response.data;
@@ -589,6 +619,11 @@ class ApiService {
 
   async deleteClient(id: string): Promise<void> {
     await this.api.delete(`${Config.ENDPOINTS.CLIENT_DETAIL(id)}`);
+  }
+
+  async setClientActive(id: string, active: boolean): Promise<void> {
+  const url = active ? Config.ENDPOINTS.CLIENT_ACTIVATE(id) : Config.ENDPOINTS.CLIENT_DEACTIVATE(id);
+  await this.api.patch(url, {});
   }
 
   async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {

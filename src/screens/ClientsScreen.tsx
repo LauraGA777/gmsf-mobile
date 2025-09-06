@@ -151,34 +151,6 @@ export const ClientsScreen: React.FC = () => {
     loadClients(true);
   };
 
-  const deleteClient = async (client: Client) => {
-    Alert.alert(
-      'Confirmar eliminación',
-      `¿Estás seguro de que quieres eliminar a ${client.nombre} ${client.apellido}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🗑️ Eliminando cliente:', client.id);
-              await apiService.deleteClient(client.id);
-              Alert.alert('Éxito', 'Cliente eliminado correctamente');
-              loadClients(true);
-            } catch (error: any) {
-              console.error('💥 Error deleting client:', error);
-              const errorMessage = error.response?.status === 404 
-                ? 'Cliente no encontrado' 
-                : 'No se pudo eliminar el cliente';
-              Alert.alert('Error', errorMessage);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const getMembershipStatusColor = (status: string) => {
     switch (status) {
       case 'activa':
@@ -229,6 +201,28 @@ export const ClientsScreen: React.FC = () => {
                 {client.activo ? 'Activo' : 'Inactivo'}
               </Text>
             </View>
+            <Pressable
+              accessibilityLabel={client.activo ? 'Desactivar cliente' : 'Activar cliente'}
+              onPress={async () => {
+                const original = client.activo;
+                setClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: !original } : c));
+                setFilteredClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: !original } : c));
+                try {
+                  await apiService.setClientActive(client.id, !original);
+                } catch (e) {
+                  setClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: original } : c));
+                  setFilteredClients(prev => prev.map(c => c.id === client.id ? { ...c, activo: original } : c));
+                  Alert.alert('Error', 'No se pudo cambiar el estado del cliente');
+                }
+              }}
+              style={({ pressed }) => [styles.toggleButton, pressed && { opacity: 0.6 }]}
+            >
+              <MaterialIcons
+                name={client.activo ? 'toggle-on' : 'toggle-off'}
+                size={32}
+                color={client.activo ? Colors.success : Colors.textLight}
+              />
+            </Pressable>
           </View>
           <Text style={styles.clientDocument}>
             {client.tipoDocumento}: {client.numeroDocumento}
@@ -289,24 +283,6 @@ export const ClientsScreen: React.FC = () => {
           </View>
         </View>
       )}
-
-      <View style={styles.clientActions}>
-        <Pressable
-          style={[styles.actionButton, { backgroundColor: Colors.primary }]}
-          onPress={() => Alert.alert('Info', 'Función de editar próximamente')}
-        >
-          <MaterialIcons name="edit" size={16} color={Colors.surface} />
-          <Text style={styles.actionButtonText}>Editar</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.actionButton, { backgroundColor: Colors.error }]}
-          onPress={() => deleteClient(client)}
-        >
-          <MaterialIcons name="delete" size={16} color={Colors.surface} />
-          <Text style={styles.actionButtonText}>Eliminar</Text>
-        </Pressable>
-      </View>
     </Card>
   );
 
@@ -508,23 +484,10 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
   },
-  clientActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    marginHorizontal: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-  },
-  actionButtonText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.surface,
-    marginLeft: Spacing.xs,
+  toggleButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
 });

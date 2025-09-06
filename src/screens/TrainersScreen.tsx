@@ -38,8 +38,8 @@ export const TrainersScreen: React.FC = () => {
       
       console.log('👨‍💼 Entrenadores cargados:', response);
       
-  // Asegurar que siempre tengamos un array válido
-  const trainersData = Array.isArray(response.data) ? response.data : (Array.isArray(response?.data?.data) ? response.data.data : response.data || []);
+      // Asegurar que siempre tengamos un array válido
+      const trainersData = Array.isArray(response.data) ? response.data : (Array.isArray((response as any)?.data?.data) ? (response as any).data.data : (response as any).data || []);
       setTrainers(trainersData);
       setFilteredTrainers(trainersData);
       
@@ -120,55 +120,6 @@ export const TrainersScreen: React.FC = () => {
     loadTrainers(true);
   };
 
-  const toggleTrainerStatus = async (trainer: Trainer) => {
-    try {
-      console.log(`🔄 ${trainer.activo ? 'Desactivando' : 'Activando'} entrenador:`, trainer.id);
-      
-      if (trainer.activo) {
-        await apiService.deactivateTrainer(trainer.id);
-        Alert.alert('Éxito', 'Entrenador desactivado correctamente');
-      } else {
-        await apiService.activateTrainer(trainer.id);
-        Alert.alert('Éxito', 'Entrenador activado correctamente');
-      }
-      loadTrainers(true);
-    } catch (error: any) {
-      console.error('💥 Error toggling trainer status:', error);
-      const errorMessage = error.response?.status === 404 
-        ? 'Entrenador no encontrado' 
-        : 'No se pudo cambiar el estado del entrenador';
-      Alert.alert('Error', errorMessage);
-    }
-  };
-
-  const deleteTrainer = async (trainer: Trainer) => {
-    Alert.alert(
-      'Confirmar eliminación',
-      `¿Estás seguro de que quieres eliminar a ${trainer.nombre} ${trainer.apellido}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🗑️ Eliminando entrenador:', trainer.id);
-              await apiService.deleteTrainer(trainer.id);
-              Alert.alert('Éxito', 'Entrenador eliminado correctamente');
-              loadTrainers(true);
-            } catch (error: any) {
-              console.error('💥 Error deleting trainer:', error);
-              const errorMessage = error.response?.status === 404 
-                ? 'Entrenador no encontrado' 
-                : 'No se pudo eliminar el entrenador';
-              Alert.alert('Error', errorMessage);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const renderTrainerCard = ({ item: trainer }: { item: Trainer }) => (
     <Card style={styles.trainerCard}>
       <View style={styles.trainerHeader}>
@@ -185,6 +136,30 @@ export const TrainersScreen: React.FC = () => {
                 {trainer.activo ? 'Activo' : 'Inactivo'}
               </Text>
             </View>
+            <Pressable
+              accessibilityLabel={trainer.activo ? 'Desactivar entrenador' : 'Activar entrenador'}
+              onPress={async () => {
+                const original = trainer.activo;
+                // Optimistic UI
+                setTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: !original } : t));
+                setFilteredTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: !original } : t));
+                try {
+                  await apiService.setTrainerActive(trainer.id, !original);
+                } catch (e) {
+                  // Revertir si falla
+                  setTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: original } : t));
+                  setFilteredTrainers(prev => prev.map(t => t.id === trainer.id ? { ...t, activo: original } : t));
+                  Alert.alert('Error', 'No se pudo cambiar el estado. Intenta nuevamente.');
+                }
+              }}
+              style={({ pressed }) => [styles.toggleButton, pressed && { opacity: 0.6 }]}
+            >
+              <MaterialIcons
+                name={trainer.activo ? 'toggle-on' : 'toggle-off'}
+                size={32}
+                color={trainer.activo ? Colors.success : Colors.textLight}
+              />
+            </Pressable>
           </View>
           <Text style={styles.trainerSpecialty}>{trainer.especialidad}</Text>
           <Text style={styles.trainerExperience}>
@@ -222,33 +197,6 @@ export const TrainersScreen: React.FC = () => {
           </View>
         </View>
       )}
-
-      <View style={styles.trainerActions}>
-        <Pressable
-          style={[
-            styles.actionButton,
-            { backgroundColor: trainer.activo ? Colors.primary : Colors.success }
-          ]}
-          onPress={() => toggleTrainerStatus(trainer)}
-        >
-          <MaterialIcons
-            name={trainer.activo ? 'pause' : 'play-arrow'}
-            size={16}
-            color={Colors.surface}
-          />
-          <Text style={styles.actionButtonText}>
-            {trainer.activo ? 'Desactivar' : 'Activar'}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.actionButton, { backgroundColor: Colors.error }]}
-          onPress={() => deleteTrainer(trainer)}
-        >
-          <MaterialIcons name="delete" size={16} color={Colors.surface} />
-          <Text style={styles.actionButtonText}>Eliminar</Text>
-        </Pressable>
-      </View>
     </Card>
   );
 
@@ -382,6 +330,12 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.medium,
     color: Colors.surface,
   },
+  toggleButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
   trainerSpecialty: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
@@ -430,24 +384,5 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.primary,
     fontWeight: FontWeight.medium,
-  },
-  trainerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    marginHorizontal: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-  },
-  actionButtonText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.medium,
-    color: Colors.surface,
-    marginLeft: Spacing.xs,
   },
 });
