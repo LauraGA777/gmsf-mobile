@@ -24,35 +24,26 @@ const MARGINS = {
 };
 
 interface DashboardData {
-  trainers: {
-    active: number;
-    inactive: number;
-    total: number;
-  };
-  clients: {
-    active: number;
-    inactive: number;
-    total: number;
-  };
-  summary: {
-    totalAttendances: number;
-    activeContracts: number;
-    monthlyRevenue: number;
-    activeMemberships: number;
-    newClients: number;
-  };
-  trends: {
-    attendanceData: Array<{ date: string; value: number }>;
-    revenueData: Array<{ date: string; value: number }>;
-  };
+  trainers: { active: number; inactive: number; total: number };
+  clients: { active: number; inactive: number; total: number };
+  summary: { totalAttendances: number; activeContracts: number; monthlyRevenue: number; activeMemberships: number; newClients: number; };
+  trends: { attendanceData: Array<{ date: string; value: number }>; revenueData: Array<{ date: string; value: number }> };
   lastUpdate?: string;
 }
+
+interface AttendanceTrendPoint { label: string; value: number; start: string; end: string; }
 
 export const DashboardScreen: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attendanceMode, setAttendanceMode] = useState<'weekly' | 'monthly'>('weekly');
+  const [trendMonth, setTrendMonth] = useState<number>(new Date().getMonth() + 1);
+  const [trendYear, setTrendYear] = useState<number>(new Date().getFullYear());
+  const [attendanceTrends, setAttendanceTrends] = useState<AttendanceTrendPoint[]>([]);
+  const [loadingTrends, setLoadingTrends] = useState(false);
+  const [trendError, setTrendError] = useState<string | null>(null);
 
   // Cargar datos del dashboard
   const loadDashboardData = useCallback(async (isRefresh = false) => {
@@ -83,28 +74,13 @@ export const DashboardScreen: React.FC = () => {
           total: clientsData.total
         },
         summary: {
-          totalAttendances: 4,
-          activeContracts: 2,
-          monthlyRevenue: 450000,
-          activeMemberships: 3,
+          totalAttendances: 0,
+          activeContracts: 0,
+          monthlyRevenue: 0,
+          activeMemberships: 0,
           newClients: clientsData.total
         },
-        trends: {
-          attendanceData: [
-            { date: '01/09', value: 0 },
-            { date: '02/09', value: 1 },
-            { date: '03/09', value: 2 },
-            { date: '04/09', value: 1 },
-            { date: '05/09', value: 0 }
-          ],
-          revenueData: [
-            { date: '01/09', value: 100000 },
-            { date: '02/09', value: 150000 },
-            { date: '03/09', value: 200000 },
-            { date: '04/09', value: 300000 },
-            { date: '05/09', value: 450000 }
-          ]
-        },
+        trends: { attendanceData: [], revenueData: [] },
         lastUpdate: new Date().toLocaleString('es-CO', {
           timeZone: 'America/Bogota',
           day: '2-digit',
@@ -132,6 +108,59 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
+
+  const loadAttendanceTrends = useCallback(async () => {
+    try {
+      setLoadingTrends(true);
+      setTrendError(null);
+      const params: any = { mode: attendanceMode };
+      if (attendanceMode === 'weekly') {
+        params.month = trendMonth;
+        params.year = trendYear;
+      } else {
+        params.year = trendYear;
+      }
+      const trendResponse = await apiService.getAttendanceTrends(params);
+      const container = trendResponse?.data || trendResponse;
+      const dataset = container?.data || container;
+      const list = Array.isArray(dataset?.data) ? dataset.data : Array.isArray(dataset) ? dataset : [];
+      const normalized: AttendanceTrendPoint[] = list.map((item: any) => ({
+        label: item.label,
+        value: item.value,
+        start: item.start,
+        end: item.end
+      }));
+      setAttendanceTrends(normalized);
+      setData(prev => prev ? { ...prev, summary: { ...prev.summary, totalAttendances: normalized.reduce((a,c)=>a + (c.value||0),0) } } : prev);
+    } catch (e:any) {
+      console.error('Error cargando tendencias de asistencia:', e);
+      setTrendError('No se pudieron cargar las tendencias de asistencia');
+    } finally {
+      setLoadingTrends(false);
+    }
+  }, [attendanceMode, trendMonth, trendYear]);
+
+  useEffect(() => {
+    loadAttendanceTrends();
+  }, [loadAttendanceTrends]);
+
+  const goPrev = () => {
+    if (attendanceMode === 'weekly') {
+      let m = trendMonth - 1; let y = trendYear; if (m < 1) { m = 12; y -= 1; }
+      setTrendMonth(m); setTrendYear(y);
+    } else {
+      setTrendYear(y => y - 1);
+    }
+  };
+  const goNext = () => {
+    if (attendanceMode === 'weekly') {
+      let m = trendMonth + 1; let y = trendYear; if (m > 12) { m = 1; y += 1; }
+      setTrendMonth(m); setTrendYear(y);
+    } else {
+      setTrendYear(y => y + 1);
+    }
+  };
+  const toggleMode = () => setAttendanceMode(m => m === 'weekly' ? 'monthly' : 'weekly');
 
   // Manejar pull to refresh
   const onRefresh = useCallback(() => {
@@ -306,26 +335,39 @@ export const DashboardScreen: React.FC = () => {
                   <Text style={styles.cardDescription}>Monitoreo de actividad del gimnasio</Text>
                 </View>
               </View>
-              <View style={styles.cardBadge}>
-                <Text style={styles.cardBadgeText}>Últimos 7 días</Text>
+              <View style={styles.cardBadgeRow}>
+                <Text style={styles.cardBadgeText} onPress={toggleMode}>
+                  {attendanceMode === 'weekly' ? 'Vista Semanal' : 'Vista Mensual'}
+                </Text>
               </View>
             </View>
             
             <View style={styles.cardContent}>
               <View style={styles.chartContainer}>
                 <View style={styles.chartHeader}>
-                  <Text style={styles.chartTitle}>Asistencias Diarias</Text>
+                  <Text style={styles.chartTitle}>
+                    {attendanceMode === 'weekly' ? `Asistencias Semanales (${trendMonth.toString().padStart(2,'0')}/${trendYear})` : `Asistencias Mensuales (${trendYear})`}
+                  </Text>
                   <View style={styles.chartMetric}>
                     <Text style={styles.chartMetricValue}>{data?.summary.totalAttendances || 0}</Text>
                     <Text style={styles.chartMetricLabel}>Total</Text>
                   </View>
                 </View>
-                <LineChart
-                  data={data?.trends.attendanceData || []}
-                  title=""
-                  color={Colors.chartBlue}
-                  height={200}
-                />
+                <View style={styles.trendControls}>
+                  <Text style={styles.navButton} onPress={goPrev}>◀</Text>
+                  <Text style={styles.periodLabel}>{attendanceMode === 'weekly' ? `${trendMonth.toString().padStart(2,'0')}/${trendYear}` : trendYear}</Text>
+                  <Text style={styles.navButton} onPress={goNext}>▶</Text>
+                </View>
+                {trendError ? (
+                  <Text style={styles.errorText}>{trendError}</Text>
+                ) : (
+                  <LineChart
+                    data={attendanceTrends.map(pt => ({ date: pt.label, value: pt.value }))}
+                    title=""
+                    color={Colors.chartBlue}
+                    height={200}
+                  />
+                )}
               </View>
             </View>
           </View>
@@ -640,4 +682,36 @@ const styles = StyleSheet.create({
     marginTop: MARGINS.vertical,
     textAlign: 'center',
   },
+  cardBadgeRow: {
+    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: MARGINS.card,
+    paddingVertical: MARGINS.vertical / 2,
+    borderRadius: 12,
+  },
+  trendControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: MARGINS.vertical * 2,
+    gap: 16,
+  },
+  navButton: {
+    fontSize: 20,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    color: Colors.primary,
+  },
+  periodLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    paddingHorizontal: 8,
+  },
+  errorText: {
+    textAlign: 'center',
+    color: Colors.error,
+    marginTop: MARGINS.vertical,
+    fontSize: 12,
+    fontWeight: '600'
+  }
 });

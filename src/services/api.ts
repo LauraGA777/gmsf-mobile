@@ -531,6 +531,31 @@ class ApiService {
     }
   }
 
+  // ASISTENCIAS - Tendencias y estadísticas
+  async getAttendanceTrends(params: { mode?: 'weekly' | 'monthly'; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get(Config.ENDPOINTS.ATTENDANCE_TRENDS, {
+        params: params
+      });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo tendencias de asistencia:', error);
+      throw error;
+    }
+  }
+
+  async getAttendanceStats(params: { period?: 'daily' | 'weekly' | 'monthly' | 'yearly'; date?: string; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get(Config.ENDPOINTS.ATTENDANCE_STATS, { params });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo estadísticas de asistencia:', error);
+      throw error;
+    }
+  }
+
   // Resto de métodos CRUD simplificados...
   async getTrainer(id: string): Promise<any> {
     try {

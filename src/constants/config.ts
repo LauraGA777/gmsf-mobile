@@ -42,6 +42,10 @@ export const Config = {
     CLIENTS_BENEFICIARIES: '/clients/me/beneficiaries',
     CLIENT_DETAIL: (id: string) => `/clients/${id}`,
     CLIENT_CHECK: (tipo: string, numero: string) => `/clients/check-user/${tipo}/${numero}`,
+
+  // Asistencias
+  ATTENDANCE_TRENDS: '/attendance/trends',
+  ATTENDANCE_STATS: '/attendance/stats',
     
     // Autenticación (si se implementa en el futuro)
     AUTH_LOGIN: '/auth/login',
