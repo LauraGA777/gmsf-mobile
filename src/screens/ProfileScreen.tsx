@@ -261,28 +261,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             </View>
 
             <View style={styles.infoItem}>
-              <MaterialIcons name="fitness-center" size={20} color={Colors.primary} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Asistencias Totales</Text>
-                <Text style={styles.infoValue}>
-                  {user.asistencias_totales !== undefined ? user.asistencias_totales : '0'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
               <MaterialIcons name="admin-panel-settings" size={20} color={Colors.primary} />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Rol en el Sistema</Text>
                 <Text style={[styles.infoValue, { color: Colors.primary }]}>Administrador</Text>
-              </View>
-            </View>
-
-            <View style={styles.infoItem}>
-              <MaterialIcons name="update" size={20} color={Colors.primary} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Última Actualización</Text>
-                <Text style={styles.infoValue}>{formatDate(user.fecha_actualizacion)}</Text>
               </View>
             </View>
           </View>
