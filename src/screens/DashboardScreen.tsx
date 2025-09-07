@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Dimensions,
-} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import LottieView from 'lottie-react-native';
-import { PieChart, MetricCard, BarChart, LineChart, StatBox, ErrorState, SummaryCard } from '../components';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // ← Agregar este import
+import { ErrorState, LineChart, PieChart, SummaryCard } from '../components';
 import { Colors } from '../constants/colors';
+import { FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -22,6 +23,14 @@ const MARGINS = {
   card: Math.max(12, screenWidth * 0.03), // Mínimo 12px, máximo 3% del ancho
   section: Math.max(20, screenWidth * 0.05), // Mínimo 20px, máximo 5% del ancho
 };
+const wp = (percentage: number) => {
+  return (screenWidth * percentage) / 100;
+};
+
+const hp = (percentage: number) => {
+  return (screenHeight * percentage) / 100;
+};
+
 
 interface DashboardData {
   trainers: { active: number; inactive: number; total: number };
@@ -57,12 +66,11 @@ export const DashboardScreen: React.FC = () => {
       const [trainersData, clientsData, quickSummary, contractStats, membershipStats, attendanceStats] = await Promise.all([
         apiService.getTrainers({ page: 1, limit: 50 }),
         apiService.getClients({ page: 1, limit: 50 }),
-        apiService.getMobileQuickSummary('today').catch(()=>null),
-        apiService.getContractStats({ period: 'monthly' }).catch(()=>null),
-        apiService.getMembershipStats({ period: 'monthly' }).catch(()=>null),
-        apiService.getAttendanceStats({ period: 'monthly' }).catch(()=>null)
+        apiService.getMobileQuickSummary('today').catch(() => null),
+        apiService.getContractStats({ period: 'monthly' }).catch(() => null),
+        apiService.getMembershipStats({ period: 'monthly' }).catch(() => null),
+        apiService.getAttendanceStats({ period: 'monthly' }).catch(() => null)
       ]);
-
       const todayStats = quickSummary?.todayStats;
 
       // Derivar métricas
@@ -147,8 +155,8 @@ export const DashboardScreen: React.FC = () => {
         end: item.end
       }));
       setAttendanceTrends(normalized);
-      setData(prev => prev ? { ...prev, summary: { ...prev.summary, periodAttendances: normalized.reduce((a,c)=>a + (c.value||0),0) } } : prev);
-    } catch (e:any) {
+      setData(prev => prev ? { ...prev, summary: { ...prev.summary, periodAttendances: normalized.reduce((a, c) => a + (c.value || 0), 0) } } : prev);
+    } catch (e: any) {
       console.error('Error cargando tendencias de asistencia:', e);
       setTrendError('No se pudieron cargar las tendencias de asistencia');
     } finally {
@@ -205,34 +213,30 @@ export const DashboardScreen: React.FC = () => {
   // Pantalla de carga
   if (loading && !data) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}> {/* ← Cambiar View por SafeAreaView */}
         <View style={styles.loadingContainer}>
-          <LottieView
-            source={require('../../assets/lottie/loading.json')}
-            autoPlay
-            loop
-            style={styles.loadingAnimation}
-          />
           <Text style={styles.loadingText}>Cargando datos del dashboard...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // Pantalla de error
   if (error && !data) {
     return (
-      <ErrorState
-        title="Error de conexión"
-        message={error}
-        onRetry={() => loadDashboardData()}
-        showAnimation={false}
-      />
+      <SafeAreaView style={styles.container}> {/* ← Agregar SafeAreaView aquí también */}
+        <ErrorState
+          title="Error de conexión"
+          message={error}
+          onRetry={() => loadDashboardData()}
+          showAnimation={false}
+        />
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}> {/* ← Cambiar View por SafeAreaView */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -266,7 +270,7 @@ export const DashboardScreen: React.FC = () => {
                 <Text style={styles.cardBadgeText}>Tiempo real</Text>
               </View>
             </View>
-            
+
             <View style={styles.cardContent}>
               {/* Grid uniforme 2 columnas (mantiene simetría). Si elementos impares, ocupa con spacer invisible */}
               <View style={styles.summaryGrid}>
@@ -357,12 +361,12 @@ export const DashboardScreen: React.FC = () => {
                 </Text>
               </View>
             </View>
-            
+
             <View style={styles.cardContent}>
               <View style={styles.chartContainer}>
                 <View style={styles.chartHeader}>
                   <Text style={styles.chartTitle}>
-                    {attendanceMode === 'weekly' ? `Asistencias Semanales (${trendMonth.toString().padStart(2,'0')}/${trendYear})` : `Asistencias Mensuales (${trendYear})`}
+                    {attendanceMode === 'weekly' ? `Asistencias Semanales (${trendMonth.toString().padStart(2, '0')}/${trendYear})` : `Asistencias Mensuales (${trendYear})`}
                   </Text>
                   <View style={styles.chartMetric}>
                     <Text style={styles.chartMetricValue}>{data?.summary.totalAttendances || 0}</Text>
@@ -371,7 +375,7 @@ export const DashboardScreen: React.FC = () => {
                 </View>
                 <View style={styles.trendControls}>
                   <Text style={styles.navButton} onPress={goPrev}>◀</Text>
-                  <Text style={styles.periodLabel}>{attendanceMode === 'weekly' ? `${trendMonth.toString().padStart(2,'0')}/${trendYear}` : trendYear}</Text>
+                  <Text style={styles.periodLabel}>{attendanceMode === 'weekly' ? `${trendMonth.toString().padStart(2, '0')}/${trendYear}` : trendYear}</Text>
                   <Text style={styles.navButton} onPress={goNext}>▶</Text>
                 </View>
                 {trendError ? (
@@ -399,7 +403,7 @@ export const DashboardScreen: React.FC = () => {
                 </View>
               </View>
             </View>
-            
+
             <View style={styles.cardContent}>
               <View style={styles.chartsRow}>
                 {/* Gráfica de Entrenadores */}
@@ -409,7 +413,7 @@ export const DashboardScreen: React.FC = () => {
                     <Text style={styles.chartTitleCenter}>Entrenadores</Text>
                     <Text style={styles.chartSubtitleCenter}>Estado del personal</Text>
                   </View>
-                  
+
                   {data && data.trainers.total > 0 ? (
                     <View style={styles.chartContentCenter}>
                       <PieChart
@@ -446,7 +450,7 @@ export const DashboardScreen: React.FC = () => {
                     <Text style={styles.chartTitleCenter}>Clientes</Text>
                     <Text style={styles.chartSubtitleCenter}>Estado de membresías</Text>
                   </View>
-                  
+
                   {data && data.clients.total > 0 ? (
                     <View style={styles.chartContentCenter}>
                       <PieChart
@@ -480,7 +484,7 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -521,18 +525,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Título Principal
+  // Título Principal ----------------------------------------------
   titleContainer: {
-    paddingHorizontal: MARGINS.card,
     paddingVertical: MARGINS.vertical * 2,
-    marginBottom: MARGINS.vertical * 2,
   },
   mainTitle: {
-    fontSize: Math.min(32, screenWidth * 0.08),
-    fontWeight: "800",
-    color: "#111827",
-    textAlign: 'center',
-    letterSpacing: -0.5,
+    fontSize: FontSize.xxxl,
+    fontWeight: FontWeight.bold,
+    color: Colors.text,
+    marginBottom: Spacing.xs,
   },
 
   // Card Container - Igual al ProfileScreen
@@ -666,7 +667,7 @@ const styles = StyleSheet.create({
   chartContentCenter: {
     alignItems: 'center',
   },
-  
+
   // Legend y estados
   chartLegend: {
     marginTop: MARGINS.card,

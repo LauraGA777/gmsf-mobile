@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { apiService } from '../services/api';
+import { FontSize, Spacing } from '../constants/layout';
 
 interface ProfileScreenProps {
   onLogout?: () => Promise<void>;
@@ -370,13 +371,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC", // Mismo color que el fondo
   },
   title: {
-    fontSize: responsiveFontSize(24),
+    fontSize: FontSize.xxxl,
     fontWeight: '700',
     color: Colors.text,
-    marginBottom: hp(0.5),
+    marginBottom: Spacing.xs,
   },
   subtitle: {
-    fontSize: responsiveFontSize(14),
+    fontSize: FontSize.md,
     color: Colors.textSecondary,
   },
   content: {
