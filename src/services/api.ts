@@ -58,15 +58,12 @@ class ApiService {
     this.api.interceptors.request.use(
       async (config) => {
         const token = await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
-        console.log(`🔍 Request: ${config.method?.toUpperCase()} ${config.url}`);
-
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
       },
       (error) => {
-        console.error('❌ Request error:', error);
         return Promise.reject(error);
       }
     );
@@ -74,18 +71,13 @@ class ApiService {
     // Response interceptor
     this.api.interceptors.response.use(
       (response) => {
-        console.log(`✅ Response: ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`);
         return response;
       },
       async (error) => {
         const status = error.response?.status;
-        console.error(`❌ API Error: ${status}`, error.response?.data);
-
         if (status === 401) {
-          console.log('🔄 Token expirado, limpiando sesión...');
           await this.clearSession();
         }
-
         return Promise.reject(error);
       }
     );
@@ -94,25 +86,16 @@ class ApiService {
   // MÉTODO DE LOGIN SOLO PARA ADMINISTRADORES
   async login(correo: string, contrasena: string): Promise<LoginResponse> {
     try {
-      console.log('🔑 Intentando login de administrador:', { correo });
-
       const response: AxiosResponse<LoginApiResponse> = await this.api.post(Config.ENDPOINTS.AUTH_LOGIN, {
         correo,
         contrasena
       });
-
-      console.log('✅ Respuesta de login:', response.data);
 
       if (response.data.status === 'success' && response.data.data) {
         const { accessToken, refreshToken, user } = response.data.data;
 
         // ✅ VALIDACIÓN CRÍTICA: Solo administradores pueden acceder
         if (user.id_rol !== 1) {
-          console.log('❌ Acceso denegado: Usuario no es administrador', {
-            rol: user.id_rol,
-            usuario: user.nombre
-          });
-
           return {
             success: false,
             error: 'Acceso denegado. Esta aplicación es exclusiva para administradores del gimnasio.'
@@ -126,8 +109,6 @@ class ApiService {
 
         // Establecer token en headers
         this.api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-
-        console.log('✅ Administrador autenticado correctamente:', user.nombre);
 
         // Mapear usuario para compatibilidad
         const mappedUser: User = {
@@ -152,8 +133,6 @@ class ApiService {
       }
 
     } catch (error: any) {
-      console.error('💥 Error en login:', error);
-
       let errorMessage = 'Error al iniciar sesión';
 
       if (error.response?.data?.message) {
@@ -180,7 +159,6 @@ class ApiService {
     try {
       return await AsyncStorage.getItem(Config.AUTH.TOKEN_KEY);
     } catch (error) {
-      console.error('Error obteniendo token:', error);
       return null;
     }
   }
@@ -217,15 +195,12 @@ class ApiService {
 
       return null;
     } catch (error) {
-      console.error('Error obteniendo usuario:', error);
       return null;
     }
   }
 
   async clearSession(): Promise<void> {
     try {
-      console.log('🧹 Limpiando sesión de administrador...');
-
       await AsyncStorage.multiRemove([
         Config.AUTH.TOKEN_KEY,
         'refreshToken',
@@ -233,19 +208,16 @@ class ApiService {
       ]);
 
       delete this.api.defaults.headers.common['Authorization'];
-
-      console.log('✅ Sesión de administrador limpiada');
     } catch (error) {
-      console.error('❌ Error limpiando sesión:', error);
+      // Error silencioso
     }
   }
 
   async logout(): Promise<void> {
     try {
       await this.api.post(Config.ENDPOINTS.AUTH_LOGOUT);
-      console.log('✅ Logout exitoso en servidor');
     } catch (error) {
-      console.warn('⚠️ Error en logout del servidor:', error);
+      // Error silencioso
     } finally {
       await this.clearSession();
     }
@@ -307,7 +279,6 @@ class ApiService {
 
       throw new Error('Error al obtener perfil');
     } catch (error) {
-      console.error('Error obteniendo perfil:', error);
       throw error;
     }
   }
@@ -353,8 +324,6 @@ class ApiService {
   // ENTRENADORES
   async getTrainers(params?: PaginationParams): Promise<PaginatedResponse<Trainer>> {
     try {
-      console.log('🔄 Admin: Obteniendo entrenadores...');
-
       const queryParams = {
         pagina: params?.page ?? 1,
         limite: params?.limit ?? 10,
@@ -363,32 +332,22 @@ class ApiService {
 
       const response = await this.api.get(Config.ENDPOINTS.TRAINERS, { params: queryParams });
 
-      console.log('✅ Entrenadores obtenidos:', response.data);
-
       let trainersData: any[] = [];
       let pagination: any = {};
 
       // Extraer datos según la estructura de respuesta real
       if (response.data.success && response.data.data) {
-        // Estructura: { success: true, data: { data: [...], pagination: {...} } }
         const apiData = response.data.data;
         trainersData = Array.isArray(apiData.data) ? apiData.data : [];
         pagination = apiData.pagination || {};
-        console.log('🔍 Entrenadores extraídos del formato success:', trainersData.length);
       } else if (response.data.status === 'success' && response.data.data) {
-        // Estructura: { status: 'success', data: { data: [...], pagination: {...} } }
         const apiData = response.data.data;
         trainersData = Array.isArray(apiData.data) ? apiData.data : [];
         pagination = apiData.pagination || {};
-        console.log('🔍 Entrenadores extraídos del formato status success:', trainersData.length);
       } else {
-        // Fallback: intentar extraer directamente
         trainersData = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : [];
         pagination = response.data?.pagination || {};
-        console.log('🔍 Entrenadores extraídos del fallback:', trainersData.length);
       }
-
-      console.log('🔍 Array de entrenadores a mapear:', trainersData);
 
       const mappedTrainers: Trainer[] = trainersData.map(this.mapTrainerFromApi.bind(this));
 
@@ -404,8 +363,6 @@ class ApiService {
       };
 
     } catch (error) {
-      console.error('💥 Error obteniendo entrenadores:', error);
-
       return {
         data: [],
         total: 0,
@@ -419,8 +376,6 @@ class ApiService {
   // CLIENTES
   async getClients(params?: PaginationParams): Promise<PaginatedResponse<Client>> {
     try {
-      console.log('🔄 Admin: Obteniendo clientes...');
-
       const queryParams = {
         page: params?.page ?? 1,
         limit: params?.limit ?? 10,
@@ -428,8 +383,6 @@ class ApiService {
       };
 
       const response = await this.api.get(Config.ENDPOINTS.CLIENTS, { params: queryParams });
-
-      console.log('✅ Clientes obtenidos:', response.data);
 
       let clientsData: any[] = [];
       let pagination: any = {};
@@ -457,8 +410,6 @@ class ApiService {
       };
 
     } catch (error) {
-      console.error('💥 Error obteniendo clientes:', error);
-
       return {
         data: [],
         total: 0,
@@ -472,13 +423,9 @@ class ApiService {
   // DASHBOARD
   async getMobileQuickSummary(period: 'today' | 'week' | 'month' = 'today'): Promise<any> {
     try {
-      console.log('🔄 Admin: Obteniendo resumen del dashboard...');
-
       const response = await this.api.get('/dashboard-mobile/quick-summary', {
         params: { period, compact: true }
       });
-
-      console.log('✅ Resumen dashboard obtenido:', response.data);
 
       if (response.data.status === 'success') {
         return response.data.data;
@@ -486,20 +433,15 @@ class ApiService {
 
       return response.data?.data || response.data;
     } catch (error: any) {
-      console.error('💥 Error obteniendo resumen dashboard:', error);
       throw error;
     }
   }
 
   async getMobileMainMetrics(period: 'today' | 'week' | 'month' = 'today'): Promise<any> {
     try {
-      console.log('🔄 Admin: Obteniendo métricas principales...');
-
       const response = await this.api.get('/dashboard-mobile/main-metrics', {
         params: { period }
       });
-
-      console.log('✅ Métricas principales obtenidas:', response.data);
 
       if (response.data.status === 'success') {
         return response.data.data;
@@ -507,18 +449,13 @@ class ApiService {
 
       return response.data?.data || response.data;
     } catch (error: any) {
-      console.error('💥 Error obteniendo métricas principales:', error);
       throw error;
     }
   }
 
   async getMobileWidget(): Promise<any> {
     try {
-      console.log('🔄 Admin: Obteniendo widget...');
-
       const response = await this.api.get('/dashboard-mobile/widget');
-
-      console.log('✅ Widget obtenido:', response.data);
 
       if (response.data.status === 'success') {
         return response.data.data;
@@ -526,7 +463,6 @@ class ApiService {
 
       return response.data?.data || response.data;
     } catch (error: any) {
-      console.error('💥 Error obteniendo widget:', error);
       throw error;
     }
   }
@@ -540,7 +476,6 @@ class ApiService {
       if (response.data.status === 'success') return response.data.data;
       return response.data?.data || response.data;
     } catch (error) {
-      console.error('💥 Error obteniendo tendencias de asistencia:', error);
       throw error;
     }
   }
@@ -551,7 +486,6 @@ class ApiService {
       if (response.data.status === 'success') return response.data.data;
       return response.data?.data || response.data;
     } catch (error) {
-      console.error('💥 Error obteniendo estadísticas de asistencia:', error);
       throw error;
     }
   }
@@ -562,7 +496,6 @@ class ApiService {
       if (response.data.status === 'success') return response.data.data;
       return response.data?.data || response.data;
     } catch (error) {
-      console.error('💥 Error obteniendo estadísticas de contratos:', error);
       throw error;
     }
   }
@@ -573,7 +506,6 @@ class ApiService {
       if (response.data.status === 'success') return response.data.data;
       return response.data?.data || response.data;
     } catch (error) {
-      console.error('💥 Error obteniendo estadísticas de membresías:', error);
       throw error;
     }
   }
@@ -585,7 +517,6 @@ class ApiService {
       const data = response.data.status === 'success' ? response.data.data : response.data;
       return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
-      console.error('Error getting trainer:', error);
       throw error;
     }
   }
@@ -596,7 +527,6 @@ class ApiService {
       const data = response.data.status === 'success' ? response.data.data : response.data;
       return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
-      console.error('Error creating trainer:', error);
       throw error;
     }
   }
@@ -607,7 +537,6 @@ class ApiService {
       const data = response.data.status === 'success' ? response.data.data : response.data;
       return this.mapTrainerFromApi(data?.trainer || data);
     } catch (error) {
-      console.error('Error updating trainer:', error);
       throw error;
     }
   }
@@ -617,8 +546,8 @@ class ApiService {
   }
 
   async setTrainerActive(id: string, active: boolean): Promise<void> {
-  const url = active ? Config.ENDPOINTS.TRAINER_ACTIVATE(id) : Config.ENDPOINTS.TRAINER_DEACTIVATE(id);
-  await this.api.patch(url, {});
+    const url = active ? Config.ENDPOINTS.TRAINER_ACTIVATE(id) : Config.ENDPOINTS.TRAINER_DEACTIVATE(id);
+    await this.api.patch(url, {});
   }
 
   async getClient(id: string): Promise<Client> {
@@ -644,8 +573,8 @@ class ApiService {
   }
 
   async setClientActive(id: string, active: boolean): Promise<void> {
-  const url = active ? Config.ENDPOINTS.CLIENT_ACTIVATE(id) : Config.ENDPOINTS.CLIENT_DEACTIVATE(id);
-  await this.api.patch(url, {});
+    const url = active ? Config.ENDPOINTS.CLIENT_ACTIVATE(id) : Config.ENDPOINTS.CLIENT_DEACTIVATE(id);
+    await this.api.patch(url, {});
   }
 
   async checkUser(tipoDocumento: string, numeroDocumento: string): Promise<{ exists: boolean; client?: Client }> {

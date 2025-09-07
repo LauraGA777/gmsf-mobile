@@ -1,44 +1,32 @@
 {
   "expo": {
-    "name": "gmsf-mobile",
+    "name": "GMSF",
     "slug": "gmsf-mobile",
     "version": "1.0.0",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.gmsf"
     },
     "android": {
-      "package": "com.strongfit.gmsfmobile",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.yourcompany.gmsf"
     },
     "web": {
-      "favicon": "./assets/logo.png",
-      "bundler": "metro"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "a732a51b-5637-4866-976f-5ab857a7f8e8"
-      }
-    },
-    "plugins": [
-      "expo-font"
-    ]
+      "favicon": "./assets/favicon.png"
+    }
   }
 }
