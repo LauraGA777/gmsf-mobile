@@ -26,7 +26,7 @@ const MARGINS = {
 interface DashboardData {
   trainers: { active: number; inactive: number; total: number };
   clients: { active: number; inactive: number; total: number };
-  summary: { totalAttendances: number; activeContracts: number; monthlyRevenue: number; activeMemberships: number; newClients: number; };
+  summary: { totalAttendances: number; periodAttendances: number; todayAttendances: number; activeContracts: number; monthlyRevenue: number; activeMemberships: number; newClients: number; };
   trends: { attendanceData: Array<{ date: string; value: number }>; revenueData: Array<{ date: string; value: number }> };
   lastUpdate?: string;
 }
@@ -53,11 +53,25 @@ export const DashboardScreen: React.FC = () => {
 
       console.log('🔄 Cargando datos del dashboard...');
 
-      // Obtener datos de entrenadores y clientes en paralelo
-      const [trainersData, clientsData] = await Promise.all([
+      // Obtener datos de entrenadores y clientes en paralelo y resumen rápido
+      const [trainersData, clientsData, quickSummary, contractStats, membershipStats, attendanceStats] = await Promise.all([
         apiService.getTrainers({ page: 1, limit: 50 }),
-        apiService.getClients({ page: 1, limit: 50 })
+        apiService.getClients({ page: 1, limit: 50 }),
+        apiService.getMobileQuickSummary('today').catch(()=>null),
+        apiService.getContractStats({ period: 'monthly' }).catch(()=>null),
+        apiService.getMembershipStats({ period: 'monthly' }).catch(()=>null),
+        apiService.getAttendanceStats({ period: 'monthly' }).catch(()=>null)
       ]);
+
+      const todayStats = quickSummary?.todayStats;
+
+      // Derivar métricas
+      const activeContracts = contractStats?.activeContracts || todayStats?.newContracts || 0;
+      const monthlyRevenue = contractStats?.periodRevenue || todayStats?.revenue || 0;
+      const activeMemberships = membershipStats?.activeMemberships || 0;
+      const newClients = clientsData.total; // TODO: reemplazar por endpoint específico si existe
+      const totalAttendances = attendanceStats?.activos ?? attendanceStats?.total ?? todayStats?.attendance ?? 0;
+      const todayAttendances = todayStats?.attendance ?? 0;
 
       console.log('✅ Datos obtenidos - Entrenadores:', trainersData, 'Clientes:', clientsData);
 
@@ -74,11 +88,13 @@ export const DashboardScreen: React.FC = () => {
           total: clientsData.total
         },
         summary: {
-          totalAttendances: 0,
-          activeContracts: 0,
-          monthlyRevenue: 0,
-          activeMemberships: 0,
-          newClients: clientsData.total
+          totalAttendances: totalAttendances,
+          periodAttendances: 0,
+          todayAttendances: todayAttendances,
+          activeContracts: activeContracts,
+          monthlyRevenue: monthlyRevenue,
+          activeMemberships: activeMemberships,
+          newClients: newClients
         },
         trends: { attendanceData: [], revenueData: [] },
         lastUpdate: new Date().toLocaleString('es-CO', {
@@ -131,7 +147,7 @@ export const DashboardScreen: React.FC = () => {
         end: item.end
       }));
       setAttendanceTrends(normalized);
-      setData(prev => prev ? { ...prev, summary: { ...prev.summary, totalAttendances: normalized.reduce((a,c)=>a + (c.value||0),0) } } : prev);
+      setData(prev => prev ? { ...prev, summary: { ...prev.summary, periodAttendances: normalized.reduce((a,c)=>a + (c.value||0),0) } } : prev);
     } catch (e:any) {
       console.error('Error cargando tendencias de asistencia:', e);
       setTrendError('No se pudieron cargar las tendencias de asistencia');
@@ -258,12 +274,12 @@ export const DashboardScreen: React.FC = () => {
                   <SummaryCard
                     title="Asistencias"
                     value={data?.summary.totalAttendances || 0}
-                    subtitle="Total de asistencias registradas"
+                    subtitle={`Total de asistencias registradas${data?.summary.todayAttendances ? ` (Hoy: ${data.summary.todayAttendances})` : ''}`}
                     icon="pulse"
                     color={Colors.primary}
                     trend={{
-                      value: (data?.summary.totalAttendances || 0) >= 2 ? 80.0 : 20.0,
-                      isPositive: (data?.summary.totalAttendances || 0) >= 2
+                      value: (data?.summary.todayAttendances || 0) >= 2 ? 80.0 : 20.0,
+                      isPositive: (data?.summary.todayAttendances || 0) >= 2
                     }}
                   />
                 </View>
