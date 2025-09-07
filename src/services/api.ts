@@ -556,6 +556,28 @@ class ApiService {
     }
   }
 
+  async getContractStats(params: { period?: 'daily' | 'monthly' | 'yearly'; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get('/contracts/stats', { params });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo estadísticas de contratos:', error);
+      throw error;
+    }
+  }
+
+  async getMembershipStats(params: { period?: 'daily' | 'monthly' | 'yearly'; month?: number; year?: number } = {}): Promise<any> {
+    try {
+      const response = await this.api.get('/memberships/stats', { params });
+      if (response.data.status === 'success') return response.data.data;
+      return response.data?.data || response.data;
+    } catch (error) {
+      console.error('💥 Error obteniendo estadísticas de membresías:', error);
+      throw error;
+    }
+  }
+
   // Resto de métodos CRUD simplificados...
   async getTrainer(id: string): Promise<any> {
     try {

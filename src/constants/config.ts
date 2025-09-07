@@ -29,7 +29,11 @@ export const Config = {
     // Dashboard
     DASHBOARD_STATS: '/dashboard/stats',
     DASHBOARD_OPTIMIZED: '/dashboard/optimized',
-    
+    // Añadidos: endpoints específicos mobile
+    DASHBOARD_MOBILE_QUICK: '/dashboard-mobile/quick-summary',
+    DASHBOARD_MOBILE_MAIN: '/dashboard-mobile/main-metrics',
+    DASHBOARD_MOBILE_WIDGET: '/dashboard-mobile/widget',
+
     // Entrenadores
     TRAINERS: '/trainers',
     TRAINER_DETAIL: (id: string) => `/trainers/${id}`,

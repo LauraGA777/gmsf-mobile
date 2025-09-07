@@ -71,21 +71,25 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
         {formatValue(value)}
       </Text>
 
-      {/* Trending */}
-      {trend && (
+      {/* Trending (se reserva espacio aunque no exista para mantener altura uniforme) */}
+      {trend ? (
         <View style={styles.trendContainer}>
-          <Ionicons 
-            name={trend.isPositive ? 'trending-up' : 'trending-down'} 
-            size={16} 
-            color={trend.isPositive ? Colors.success : Colors.error} 
+          <Ionicons
+            name={trend.isPositive ? 'trending-up' : 'trending-down'}
+            size={16}
+            color={trend.isPositive ? Colors.success : Colors.error}
           />
-          <Text style={[
-            styles.trendText,
-            { color: trend.isPositive ? Colors.success : Colors.error }
-          ]}>
+          <Text
+            style={[
+              styles.trendText,
+              { color: trend.isPositive ? Colors.success : Colors.error }
+            ]}
+          >
             {trend.isPositive ? '+' : ''}{trend.value.toFixed(1)}%
           </Text>
         </View>
+      ) : (
+        <View style={styles.trendPlaceholder} />
       )}
 
       {/* Subtítulo */}
@@ -151,11 +155,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
+    height: 20, // fija altura para uniformidad
   },
   trendText: {
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  trendPlaceholder: {
+    height: 20,
+    marginBottom: 2,
   },
   subtitle: {
     fontSize: 12,
