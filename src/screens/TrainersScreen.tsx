@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  Alert,
   FlatList,
   Pressable,
-  TextInput,
-  Alert,
   RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Loading, EmptyState } from '../components';
+import { Card, EmptyState, Loading } from '../components';
 import { Colors, Shadows } from '../constants/colors';
-import { Spacing, FontSize, FontWeight, BorderRadius } from '../constants/layout';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
 import { Trainer } from '../types';
 
@@ -27,25 +27,25 @@ export const TrainersScreen: React.FC = () => {
   const loadTrainers = async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
-      
+
       console.log('🔄 Cargando entrenadores...');
-      
+
       const response = await apiService.getTrainers({
         page: 1,
         limit: 50,
         search: searchQuery || undefined
       });
-      
+
       console.log('👨‍💼 Entrenadores cargados:', response);
-      
+
       // Asegurar que siempre tengamos un array válido
       const trainersData = Array.isArray(response.data) ? response.data : (Array.isArray((response as any)?.data?.data) ? (response as any).data.data : (response as any).data || []);
       setTrainers(trainersData);
       setFilteredTrainers(trainersData);
-      
+
     } catch (error: any) {
       console.error('💥 Error loading trainers:', error);
-      
+
       // En caso de error, usar datos de ejemplo para desarrollo
       console.log('🔧 Usando datos de ejemplo para entrenadores...');
       const mockTrainers: any[] = [
@@ -89,12 +89,12 @@ export const TrainersScreen: React.FC = () => {
           foto: null,
         },
       ];
-      
+
       setTrainers(mockTrainers);
       setFilteredTrainers(mockTrainers);
     } finally {
       setLoading(false);
-  if (isRefresh) setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
     }
   };
 
@@ -185,7 +185,7 @@ export const TrainersScreen: React.FC = () => {
         </View>
       </View>
 
-  {Array.isArray(trainer.certificaciones) && trainer.certificaciones.length > 0 && (
+      {Array.isArray(trainer.certificaciones) && trainer.certificaciones.length > 0 && (
         <View style={styles.certificationsContainer}>
           <Text style={styles.certificationsTitle}>Certificaciones:</Text>
           <View style={styles.certificationsList}>
@@ -209,7 +209,7 @@ export const TrainersScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Entrenadores</Text>
         <Text style={styles.subtitle}>
-          {filteredTrainers.length} entrenadores encontrados
+          {filteredTrainers.length} entrenador{filteredTrainers.length !== 1 ? 'es' : ''} encontrado{filteredTrainers.length !== 1 ? 's' : ''}
         </Text>
       </View>
 

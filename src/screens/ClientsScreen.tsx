@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  Alert,
   FlatList,
   Pressable,
-  TextInput,
-  Alert,
   RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Loading, EmptyState } from '../components';
+import { Card, EmptyState, Loading } from '../components';
 import { Colors, Shadows } from '../constants/colors';
-import { Spacing, FontSize, FontWeight, BorderRadius } from '../constants/layout';
+import { BorderRadius, FontSize, FontWeight, Spacing } from '../constants/layout';
 import { apiService } from '../services/api';
 import { Client } from '../types';
 
@@ -27,24 +27,24 @@ export const ClientsScreen: React.FC = () => {
   const loadClients = async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
-      
+
       console.log('🔄 Cargando clientes...');
-      
-  const response = await apiService.getClients();
-      
-  console.log('👥 Clientes cargados:', response);
-      
-  const clientsData = Array.isArray(response.data) ? response.data : (Array.isArray((response as any)?.data?.data) ? (response as any).data.data : response.data || []);
+
+      const response = await apiService.getClients();
+
+      console.log('👥 Clientes cargados:', response);
+
+      const clientsData = Array.isArray(response.data) ? response.data : (Array.isArray((response as any)?.data?.data) ? (response as any).data.data : response.data || []);
       setClients(clientsData);
       setFilteredClients(clientsData);
     } catch (error: any) {
       console.error('💥 Error loading clients:', error);
-      
+
       const isNetworkError = !error.response;
       const statusCode = error.response?.status;
-      
+
       let errorMessage = 'No se pudieron cargar los clientes';
-      
+
       if (isNetworkError) {
         errorMessage = 'Error de conexión. Verifica tu conexión a internet.';
       } else if (statusCode === 404) {
@@ -52,9 +52,9 @@ export const ClientsScreen: React.FC = () => {
       } else if (statusCode === 500) {
         errorMessage = 'Error interno del servidor. Intenta nuevamente.';
       }
-      
+
       Alert.alert('Error', errorMessage);
-      
+
       // Datos de ejemplo para desarrollo cuando falla la API
       console.log('🔧 Usando datos de ejemplo para clientes...');
       const mockClients: Client[] = [
@@ -119,7 +119,7 @@ export const ClientsScreen: React.FC = () => {
           },
         },
       ];
-      
+
       setClients(mockClients);
       setFilteredClients(mockClients);
     } finally {
@@ -295,7 +295,7 @@ export const ClientsScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Clientes</Text>
         <Text style={styles.subtitle}>
-          {filteredClients.length} clientes encontrados
+          {filteredClients.length} cliente{filteredClients.length !== 1 ? 's' : ''} encontrado{filteredClients.length !== 1 ? 's' : ''}
         </Text>
       </View>
 
